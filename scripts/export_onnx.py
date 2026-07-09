@@ -105,39 +105,23 @@ def export_onnx(
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    try:
-        torch.onnx.export(
-            model,
-            (dummy_input,),
-            output_path,
-            input_names=["images"],
-            output_names=["logits"],
-            dynamic_axes={
-                "images": {0: "batch_size"},
-                "logits": {0: "batch_size"},
-            },
-            opset_version=opset,
-            dynamo=True,
-        )
-        print("Export method: torch.onnx.export(dynamo=True)")
-    except Exception as exc:
-        print("dynamo=True export failed. Falling back to legacy exporter.")
-        print(f"Reason: {type(exc).__name__}: {exc}")
+    # Use the legacy exporter here because it correctly preserves the
+    # dynamic batch dimension for both input and output in this project.
+    torch.onnx.export(
+        model,
+        dummy_input,
+        output_path,
+        input_names=["images"],
+        output_names=["logits"],
+        dynamic_axes={
+            "images": {0: "batch_size"},
+            "logits": {0: "batch_size"},
+        },
+        opset_version=opset,
+        do_constant_folding=True,
+    )
 
-        torch.onnx.export(
-            model,
-            dummy_input,
-            output_path,
-            input_names=["images"],
-            output_names=["logits"],
-            dynamic_axes={
-                "images": {0: "batch_size"},
-                "logits": {0: "batch_size"},
-            },
-            opset_version=opset,
-            do_constant_folding=True,
-        )
-        print("Export method: legacy torch.onnx.export")
+    print("Export method: legacy torch.onnx.export")
 
 
 def check_onnx_model(output_path: Path) -> None:
