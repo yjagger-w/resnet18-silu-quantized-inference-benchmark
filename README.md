@@ -401,3 +401,8 @@ Reduced model size from 42.62 MB to 10.80 MB with only 0.09 percentage-point acc
 Integrated a custom SiLU-aware PTQ simulation with KLD-based `Vmax` search, MSE-based `vsplit` selection, piecewise asymmetric activation quantization, per-channel weight quantization, bias correction, and layer-wise error analysis.
 
 Improved ResNet18-SiLU INT8 simulation accuracy from 91.88% with NCNN-style activation quantization to 92.97% using SiLU-aware PTQ, reducing accuracy drop from 1.86 pp to 0.77 pp.
+
+## License
+
+This project is released under the MIT License. See [LICENSE](LICENSE) for details.
+
