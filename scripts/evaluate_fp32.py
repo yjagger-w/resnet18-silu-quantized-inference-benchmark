@@ -7,7 +7,7 @@ from pathlib import Path
 import torch
 
 # Add the project root to Python's import path so that
-# "hku_silu_ptq" can be imported when this script is run directly.
+# the local silu_benchmark package can be imported when this script is run directly.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
 sys.path.insert(0, str(SRC_ROOT))
