@@ -1,6 +1,14 @@
 """Quantization utilities."""
 
-from .activation import ActivationQuantizerNCNN, ActivationQuantizerSiLUAware, BaseQuantizer
+from .activation import (
+    ActivationQuantizerNCNN,
+    ActivationQuantizerSiLUAware,
+    BaseQuantizer,
+    PiecewiseQuantizationSpec,
+    piecewise_dequantize,
+    piecewise_quantize,
+    piecewise_quantize_dequantize,
+)
 from .thresholds import (
     compute_ncnn_threshold,
     compute_silu_aware_thresholds,
@@ -13,10 +21,14 @@ __all__ = [
     "ActivationQuantizerNCNN",
     "ActivationQuantizerSiLUAware",
     "BaseQuantizer",
+    "PiecewiseQuantizationSpec",
     "apply_bias_correction",
     "compute_ncnn_threshold",
     "compute_silu_aware_thresholds",
     "mse_split_threshold",
     "ncnn_kld_threshold_optimized",
     "quantize_weights_per_channel",
+    "piecewise_dequantize",
+    "piecewise_quantize",
+    "piecewise_quantize_dequantize",
 ]
