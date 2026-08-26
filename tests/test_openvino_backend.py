@@ -310,19 +310,43 @@ assert 'openvino' not in sys.modules
     @unittest.skipUnless(importlib.util.find_spec("openvino"), "OpenVINO absent: real CPU integration not run")
     def test_optional_real_cpu_integration(self):
         program = r'''
-import json, pathlib, tempfile, numpy as np
+import json, pathlib, sys, numpy as np
 from silu_benchmark.backends.openvino_backend import verify_source, convert_standard_qdq, OpenVINOCPU
 root=pathlib.Path.cwd()
 cfg=json.loads((root/'configs/benchmarks/resnet18_silu_cifar10_v08_openvino_cpu.json').read_text())
 source=verify_source(root,cfg)
-with tempfile.TemporaryDirectory() as temporary:
-    bundle=convert_standard_qdq(pathlib.Path(temporary),cfg,source)
-    backend=OpenVINOCPU(bundle,cfg['compile_properties'])
+bundle=convert_standard_qdq(pathlib.Path(sys.argv[1]),cfg,source)
+backend=OpenVINOCPU(bundle,cfg['compile_properties'])
+result=None
+try:
     result=backend.predict(np.zeros((1,3,32,32),np.float32))
     assert result.shape==(1,10) and np.all(np.isfinite(result))
+    assert not any(name.split('.')[0] in ('torch', 'torchvision') for name in sys.modules)
+finally:
+    # The infer request also owns compiled-model resources. Release it first;
+    # constructor/converter-local model and core objects are already out of scope.
+    del result
+    del backend.request
+    del backend.compiled
+    del backend
 '''
-        result = subprocess.run([sys.executable, "-c", program], cwd=ROOT, capture_output=True, text=True, timeout=180)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        # Windows keeps IR weights mapped while native inference resources live.
+        # The parent owns storage and waits for process exit before any cleanup,
+        # including failure/timeout paths; no native objects cross this boundary.
+        with tempfile.TemporaryDirectory(prefix="openvino-cpu-integration-") as temporary:
+            result = subprocess.run([sys.executable, "-c", program, temporary], cwd=ROOT,
+                                    capture_output=True, text=True, timeout=180)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            ir_root = Path(temporary) / config()["ir_output"]
+            bundles = list(ir_root.glob("*/metadata.json"))
+            self.assertEqual(len(bundles), 1, "real conversion must produce one IR bundle")
+            for name in ("model.xml", "model.bin"):
+                with self.subTest(ir_file=name):
+                    path = bundles[0].parent / name
+                    self.assertTrue(path.is_file())
+                    path.unlink()  # WinError 32 must fail the test, never be ignored.
+                    self.assertFalse(path.exists())
+        self.assertFalse(Path(temporary).exists())
 
 
 if __name__ == "__main__":
