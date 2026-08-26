@@ -41,7 +41,24 @@ The reference enforces finite, strictly ordered parameters; finite positive scal
 
 ## Backend Separation
 
-Standard ONNX QDQ, with one scale and zero-point per tensor, is the portable deployment baseline. It must not be reported as implementing this custom piecewise method. The next v0.6 phase may express this verified reference with ONNX Where, Clip, Round, Mul, and Add operators and compare Python and ONNX Runtime outputs. C++ custom-operator work belongs to v0.7. This milestone does not implement either backend path.
+Standard ONNX QDQ, with one scale and zero-point per tensor, is the portable deployment baseline. It must not be reported as implementing this custom piecewise method. v0.6 Phase 2 expresses the verified reference with ordinary ONNX operators and compares it with ONNX Runtime; C++ custom-operator work remains a future v0.7 backend path.
+
+## ONNX Standard-Operator Reference (v0.6 Phase 2)
+
+`silu_benchmark.quantization.piecewise_quantize` and `piecewise_dequantize` remain the canonical Python reference. `silu_benchmark.backends.onnx_piecewise.build_piecewise_qdq_model` expresses those same two affine segments as an ONNX subgraph using ordinary `Cast`, `Clip`, `Less`, `Where`, `Div`, `Add`, `Sub`, `Mul`, and `Round` nodes. It uses ONNX opset 13, which is supported by the project's ONNX Runtime 1.19.2 environment.
+
+The graph accepts a float32 tensor named `activation` and publishes `quantized_codes` as uint8 plus `dequantized_output` as float32. The builder takes an `input_shape` argument so callers can choose a scalar, vector, matrix, or higher practical tensor rank; dimensions may be dynamic, though ONNX requires the rank itself to be declared. Arithmetic through code selection is float64 so the graph consumes the validated `PiecewiseQuantizationSpec` scalars without independently re-deriving them; the published dequantized float32 value is the final cast of the canonical reconstruction. `x < Vsplit` selects the lower branch, so the split itself belongs to the upper branch. The input is clipped before quantization, each branch is clipped to its own disjoint code range, and decoded values are clipped to `[Vmin, Vmax]`.
+
+Validation requires exact uint8 code equality. The float32 reconstruction comparison uses an absolute tolerance of `2e-7`, which is deliberately strict for the final float32 cast; test failures report the input, selected segment, both codes, both reconstructed values, and the absolute error.
+
+This is a functional ONNX expression of the custom piecewise method, not an ordinary one-scale `QuantizeLinear`/`DequantizeLinear` graph and not a claim of hardware INT8 acceleration. The standard QDQ deployment baseline stays separate. Current limitations are that this validates only the standalone subgraph on `CPUExecutionProvider`; replacing SiLU nodes in the ResNet18 model and a C++ custom-operator/runtime backend remain future work.
+
+Run the validation with:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+python -m unittest discover -s tests -v
+```
 
 ## Audit Decisions and Contradictions
 

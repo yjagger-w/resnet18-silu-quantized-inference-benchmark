@@ -133,6 +133,8 @@ Key observation:
 
 The SiLU-aware method improves over the NCNN-style activation quantization simulation, but the current PyTorch-side simulation is not directly equivalent to the ONNX Runtime QDQ INT8 graph. Therefore, standard ORT PTQ and SiLU-aware PTQ are reported as separate evaluation tracks.
 
+The repository also contains a standalone ONNX standard-operator reference subgraph for the locked SiLU piecewise contract. It returns uint8 codes and float32 reconstructed values, but is not standard single-scale QDQ and does not claim INT8 acceleration. See `docs/quantization_spec.md` for its contract and validation command.
+
 ## Project Structure
 
 ```text
