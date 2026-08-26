@@ -149,6 +149,26 @@ The manifest must contain a `sites` list with exactly one `{site_id, vmin, vspli
 
 This is a functional ONNX Runtime reference: it retains float64 internal arithmetic to preserve reference rounding, remains separate from the standard QDQ baseline, and is not evidence of OpenVINO/QNN portability or end-to-end INT8 performance.
 
+### Phase 3.1 calibrated manifest
+
+`configs/calibration/resnet18_silu_piecewise_v06.json` is the versioned v0.6 calibration manifest. It records 17 runtime call sites (nine modules, with shared block activations represented by invocation ordinal), the real checkpoint digest, deterministic CIFAR-10 training indices, and the canonical positive-`Vsplit` parameters plus auditable derived fields. Generate it with the real local assets:
+
+```powershell
+python scripts/generate_silu_piecewise_manifest.py `
+  --checkpoint checkpoints\resnet18_cifar10.pth `
+  --data-root data `
+  --batch-size 128 `
+  --num-calibration-batches 20 `
+  --seed 20260826 `
+  --output configs\calibration\resnet18_silu_piecewise_v06.json
+```
+
+The legacy `results/silu_aware_thresholds.json` is retained unchanged as historical evidence, but is deliberately rejected as a v0.6 manifest: it was produced before the locked contract and stores negative `Vsplit` values. The real closure command uses a separately selected CIFAR-10 test image for numerical comparison only; it does not measure accuracy:
+
+```powershell
+python scripts/validate_silu_piecewise_full_model.py --manifest configs\calibration\resnet18_silu_piecewise_v06.json
+```
+
 ## Project Structure
 
 ```text

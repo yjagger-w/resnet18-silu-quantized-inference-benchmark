@@ -141,25 +141,11 @@ def _validate_site_specs(
 
 
 def load_site_spec_manifest(path: Union[str, Path]) -> dict[str, PiecewiseQuantizationSpec]:
-    """Read the reproducible JSON manifest consumed by the rewrite CLI."""
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    entries = payload.get("sites") if isinstance(payload, dict) else None
-    if not isinstance(entries, list):
-        raise ValueError("spec manifest must be an object containing a 'sites' list")
-    result = {}
-    for entry in entries:
-        if not isinstance(entry, dict) or "site_id" not in entry:
-            raise ValueError("each manifest entry must include site_id")
-        site_id = str(entry["site_id"])
-        if site_id in result:
-            raise ValueError(f"duplicate site mapping: {site_id}")
-        try:
-            result[site_id] = PiecewiseQuantizationSpec(
-                float(entry["vmin"]), float(entry["vsplit"]), float(entry["vmax"]), int(entry.get("bits", 8))
-            )
-        except KeyError as exc:
-            raise ValueError(f"manifest entry {site_id} is missing {exc.args[0]}") from exc
-    return result
+    """Read only the versioned v0.6 calibration manifest contract."""
+    from silu_benchmark.calibration_manifest import load_manifest
+
+    _payload, site_specs = load_manifest(Path(path))
+    return site_specs
 
 
 def _rewrite_metadata(

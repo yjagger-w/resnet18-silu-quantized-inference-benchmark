@@ -81,7 +81,7 @@ class FullModelPiecewiseRewriteTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             manifest = Path(directory) / "duplicate.json"
             manifest.write_text(json.dumps({"sites": [{"site_id": "act.call_0", "vmin": -1, "vsplit": 0.1, "vmax": 1}, {"site_id": "act.call_0", "vmin": -1, "vsplit": 0.1, "vmax": 1}]}))
-            with self.assertRaisesRegex(ValueError, "duplicate"):
+            with self.assertRaisesRegex(ValueError, "legacy"):
                 load_site_spec_manifest(manifest)
 
     def test_full_model_export_rewrite_inspection_and_equivalence(self):
