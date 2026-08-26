@@ -25,3 +25,4 @@ results/*.txt
 .idea/
 .DS_Store
 Thumbs.db
+/results/benchmarks/v0.6.5_console.log
