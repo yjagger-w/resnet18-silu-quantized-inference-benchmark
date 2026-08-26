@@ -18,6 +18,9 @@ results/*.csv
 results/*.json
 results/*.txt
 
+# Generated v0.6.5 runs (including smoke and partial runs); never source/templates.
+/results/benchmarks/v0.6.5*/
+
 .vscode/
 .idea/
 .DS_Store

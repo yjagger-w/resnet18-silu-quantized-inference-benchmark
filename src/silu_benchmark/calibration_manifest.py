@@ -8,14 +8,14 @@ import os
 import tempfile
 from collections import OrderedDict
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import TYPE_CHECKING, Mapping, Sequence
 
 import numpy as np
-import torch
-import torch.nn as nn
+if TYPE_CHECKING:
+    import torch
+    import torch.nn as nn
 
 from .quantization import PiecewiseQuantizationSpec
-from .quantization.thresholds import compute_silu_aware_thresholds
 
 
 SCHEMA_VERSION = "silu-piecewise-calibration-manifest/v1"
@@ -38,6 +38,9 @@ def collect_silu_callsite_activations(
     max_samples_per_site: int = 10000,
 ) -> OrderedDict[str, np.ndarray]:
     """Collect distinct SiLU outputs keyed by module path and call ordinal."""
+    import torch
+    import torch.nn as nn
+
     modules = [(name, module) for name, module in model.named_modules() if isinstance(module, nn.SiLU)]
     if not modules:
         raise ValueError("model has no nn.SiLU modules")
@@ -96,6 +99,8 @@ def build_manifest(
     bits: int = 8,
 ) -> dict:
     """Build an ordered, fully auditable positive-Vsplit manifest payload."""
+    from .quantization.thresholds import compute_silu_aware_thresholds
+
     sites = []
     for site_id, activations in site_activations.items():
         if ".call_" not in site_id:
