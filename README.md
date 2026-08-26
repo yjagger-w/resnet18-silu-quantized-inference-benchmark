@@ -444,5 +444,16 @@ Improved ResNet18-SiLU INT8 simulation accuracy from 91.88% with NCNN-style acti
 
 ## License
 
+## ORT-native calibration and closure
+
+`configs/calibration/resnet18_silu_piecewise_v06_ort_cpu.json` is separate from the PyTorch-origin manifest. It records activation statistics collected from actual baseline ONNX `Sigmoid → Mul` SiLU outputs on `CPUExecutionProvider`, including model digest, provider/runtime versions, and the ordered 17-site identity.
+
+```powershell
+python scripts/generate_silu_piecewise_ort_manifest.py --output configs\calibration\resnet18_silu_piecewise_v06_ort_cpu.json
+python scripts/validate_silu_piecewise_ort_native.py --manifest configs\calibration\resnet18_silu_piecewise_v06_ort_cpu.json
+```
+
+Validation applies the canonical Python Q/DQ reference to the exact ORT-produced pre-Q/DQ SiLU tensors and compares each result with the embedded ONNX subgraph. This is same-backend functional closure only; it does not remove the documented PyTorch-versus-ORT boundary sensitivity, prove portability, or claim INT8 acceleration.
+
 This project is released under the MIT License. See [LICENSE](LICENSE) for details.
 
