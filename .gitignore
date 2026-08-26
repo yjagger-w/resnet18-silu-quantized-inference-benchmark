@@ -26,3 +26,7 @@ results/*.txt
 .DS_Store
 Thumbs.db
 /results/benchmarks/v0.6.5_console.log
+
+# v0.8 generated OpenVINO IR bundles and benchmark runs (source/configs stay visible).
+/artifacts/openvino/v0.8/
+/results/benchmarks/v0.8*/

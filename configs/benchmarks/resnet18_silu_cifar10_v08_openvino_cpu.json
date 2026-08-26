@@ -1,0 +1,38 @@
+{
+  "schema_version": "benchmark/v0.8-openvino-cpu",
+  "model_architecture": "ResNet18-SiLU-CIFAR10",
+  "source_model": "artifacts/int8/resnet18_silu_int8_v065.onnx",
+  "source_sha256": "fba46162c6685d7d23bd6da0a94d14bfa09f11babfc776fd5597a9e39c41b3ac",
+  "source_report": "results/benchmarks/v0.6.5/benchmark_results.json",
+  "source_sidecar": "artifacts/int8/resnet18_silu_int8_v065.onnx.v065.json",
+  "checkpoint": "checkpoints/resnet18_cifar10.pth",
+  "dataset": "CIFAR-10",
+  "data_root": "data",
+  "evaluation_split": "test",
+  "preprocessing": "ToTensor; Normalize(mean=[0.4914,0.4822,0.4465], std=[0.2023,0.1994,0.2010])",
+  "calibration_samples": 2560,
+  "calibration_batch_size": 128,
+  "standard_qdq": {
+    "format": "QDQ", "calibration": "MinMax", "activation_type": "QUInt8",
+    "weight_type": "QInt8", "per_channel": true
+  },
+  "seed": 20260826,
+  "device": "CPU",
+  "conversion": {
+    "frontend": "Core.read_model", "serializer": "serialize",
+    "ir_version": "IR_V11", "compress_to_fp16": false
+  },
+  "compile_properties": {"PERFORMANCE_HINT": "LATENCY"},
+  "evaluation_samples": 10000,
+  "evaluation_batch_size": 128,
+  "validation_batch_size": 128,
+  "latency_batch_size": 1,
+  "latency_warmup_runs": 20,
+  "latency_timed_runs": 100,
+  "throughput_batch_size": 128,
+  "throughput_warmup_runs": 10,
+  "throughput_timed_runs": 30,
+  "tolerance": null,
+  "ir_output": "artifacts/openvino/v0.8/standard_qdq_cpu",
+  "output_directory": "results/benchmarks/v0.8_openvino_cpu"
+}
