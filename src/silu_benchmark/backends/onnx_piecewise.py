@@ -7,6 +7,8 @@ ONNX QDQ describes a single affine quantizer per node.
 
 from __future__ import annotations
 
+import copy
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Sequence, Union
 
@@ -22,6 +24,14 @@ from silu_benchmark.quantization import PiecewiseQuantizationSpec
 # scalar bounds. The graph's IR version is pinned for that runtime release.
 PIECEWISE_ONNX_OPSET = 13
 _ORT_COMPATIBLE_IR_VERSION = 10
+
+
+@dataclass(frozen=True)
+class PiecewiseSubgraphOutputs:
+    """Named tensors emitted when the reference graph is embedded in a model."""
+
+    quantized_codes: str
+    dequantized_output: str
 
 
 def _float64_initializer(name: str, value: float) -> onnx.TensorProto:
@@ -133,6 +143,59 @@ def build_piecewise_qdq_model(
     model.ir_version = _ORT_COMPATIBLE_IR_VERSION
     onnx.checker.check_model(model)
     return model
+
+
+def build_piecewise_qdq_subgraph(
+    spec: PiecewiseQuantizationSpec,
+    input_name: str,
+    prefix: str,
+    dequantized_output_name: Optional[str] = None,
+) -> tuple[list[onnx.NodeProto], list[onnx.TensorProto], PiecewiseSubgraphOutputs]:
+    """Embed the checked reference graph with collision-free tensor names.
+
+    The standalone builder above remains the sole source of the mathematical
+    graph.  This adapter only renames its already-checked nodes and constants
+    so they can be inserted into a larger ONNX graph.
+    """
+    if not prefix or not prefix.replace("_", "").isalnum():
+        raise ValueError("prefix must be a non-empty alphanumeric identifier")
+
+    reference = build_piecewise_qdq_model(spec, input_shape=(None, None, None, None))
+    output_names = {
+        "quantized_codes": f"{prefix}_quantized_codes",
+        "dequantized_output": dequantized_output_name or f"{prefix}_dequantized_output",
+    }
+    tensor_names = {"activation": input_name, **output_names}
+    initializer_names = {item.name: f"{prefix}_{item.name}" for item in reference.graph.initializer}
+    tensor_names.update(initializer_names)
+
+    def renamed(name: str) -> str:
+        if not name:
+            return name
+        return tensor_names.setdefault(name, f"{prefix}_{name}")
+
+    initializers = []
+    for item in reference.graph.initializer:
+        copied = copy.deepcopy(item)
+        copied.name = initializer_names[item.name]
+        initializers.append(copied)
+
+    nodes = []
+    for index, node in enumerate(reference.graph.node):
+        copied = copy.deepcopy(node)
+        copied.name = f"{prefix}_{index:02d}_{node.op_type.lower()}"
+        copied.input[:] = [renamed(name) for name in node.input]
+        copied.output[:] = [renamed(name) for name in node.output]
+        nodes.append(copied)
+
+    return (
+        nodes,
+        initializers,
+        PiecewiseSubgraphOutputs(
+            quantized_codes=output_names["quantized_codes"],
+            dequantized_output=output_names["dequantized_output"],
+        ),
+    )
 
 
 def create_piecewise_ort_session(

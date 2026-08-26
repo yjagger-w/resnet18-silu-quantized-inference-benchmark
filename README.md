@@ -135,6 +135,20 @@ The SiLU-aware method improves over the NCNN-style activation quantization simul
 
 The repository also contains a standalone ONNX standard-operator reference subgraph for the locked SiLU piecewise contract. It returns uint8 codes and float32 reconstructed values, but is not standard single-scale QDQ and does not claim INT8 acceleration. See `docs/quantization_spec.md` for its contract and validation command.
 
+## SiLU Piecewise Full-Model Reference
+
+The Phase 3 path exports the FP32 ResNet18-SiLU model, discovers only exact `Mul(x, Sigmoid(x))` SiLU patterns, binds a valid `PiecewiseQuantizationSpec` to every exported call site, rewrites each pattern with the verified reference subgraph, checks it, runs it on ONNX Runtime CPU, and writes a JSON capability report. In the current exporter there are 17 call sites: the nine configured SiLU modules include eight residual-block modules invoked twice.
+
+```powershell
+python scripts/export_onnx.py --checkpoint checkpoints/resnet18_cifar10.pth --output artifacts/onnx/resnet18_silu_fp32.onnx --opset 18
+python scripts/rewrite_silu_piecewise_onnx.py --spec-manifest path\to\site_specs.json
+python scripts/inspect_onnx_model.py --model artifacts/onnx/resnet18_silu_piecewise_reference.onnx --report results/silu_piecewise_onnx_report.json
+```
+
+The manifest must contain a `sites` list with exactly one `{site_id, vmin, vsplit, vmax, bits}` entry for every discovered site. It is an explicit calibration artifact; the historical threshold JSON is not a valid Phase 3 manifest because it predates the locked positive-`Vsplit` contract. Generated ONNX models under `artifacts/onnx/` and JSON reports under `results/` are intentionally untracked.
+
+This is a functional ONNX Runtime reference: it retains float64 internal arithmetic to preserve reference rounding, remains separate from the standard QDQ baseline, and is not evidence of OpenVINO/QNN portability or end-to-end INT8 performance.
+
 ## Project Structure
 
 ```text
