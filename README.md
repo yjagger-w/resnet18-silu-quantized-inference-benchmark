@@ -169,6 +169,10 @@ The legacy `results/silu_aware_thresholds.json` is retained unchanged as histori
 python scripts/validate_silu_piecewise_full_model.py --manifest configs\calibration\resnet18_silu_piecewise_v06.json
 ```
 
+### Phase 3.2 boundary diagnostic
+
+Use `scripts/diagnose_silu_piecewise_mismatch.py` to create an ignored JSON report with per-call-site pre-SiLU, SiLU-expression, code, reconstruction, and rounding-margin diagnostics. The real fixed-input result localizes the first code difference to `layer1.0.act.call_1`: a `2.38e-7` PyTorch/ORT pre-activation difference crosses an upper-segment half-integer rounding boundary, producing codes 128 and 129. This is retained as boundary-sensitivity evidence, not hidden by a tolerance change. Future work must explicitly choose a new validation/reference policy (for example an ORT-native reference or a formally specified boundary-stability policy); the locked v0.6 contract is unchanged.
+
 ## Project Structure
 
 ```text
