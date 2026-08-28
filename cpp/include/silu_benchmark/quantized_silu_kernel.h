@@ -53,6 +53,13 @@ std::uint8_t QuantizePostSiluReference(
     double post_silu_value,
     const QuantizedSiluKernelParams& params);
 
+// Canonical two-segment reconstruction used by both the standard-operator
+// reference and the ORT custom operator. Arithmetic is performed in float64,
+// clipped to the frozen range, and converted to float32 only at the boundary.
+float DequantizePiecewiseCodeReference(
+    std::uint8_t code,
+    const QuantizedSiluKernelParams& params) noexcept;
+
 // Portable scalar uint8 -> uint8 kernel. Exact in-place operation is supported;
 // any other overlapping input/output ranges are rejected.
 void QuantizedSiluScalar(

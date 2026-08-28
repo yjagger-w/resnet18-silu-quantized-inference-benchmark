@@ -15,6 +15,7 @@
 namespace {
 
 using silu_benchmark::MakeQuantizedSiluKernelParams;
+using silu_benchmark::DequantizePiecewiseCodeReference;
 using silu_benchmark::PiecewiseOutputQuantizationParams;
 using silu_benchmark::QuantizedDataType;
 using silu_benchmark::QuantizedSiluScalar;
@@ -118,6 +119,22 @@ void TestPostSiluReferenceProbes() {
         "Vsplit must belong to upper segment");
 }
 
+void TestPiecewiseDequantization() {
+  const auto params = GoldenParams();
+  for (std::int32_t code = 0; code <= 255; ++code) {
+    const double reconstructed =
+        code <= 127
+            ? static_cast<double>(code - params.lower_zero_point) * params.lower_scale
+            : static_cast<double>(code - params.upper_zero_point) * params.upper_scale;
+    const float expected = static_cast<float>(std::max(
+        params.output.vmin, std::min(reconstructed, params.output.vmax)));
+    const float actual = DequantizePiecewiseCodeReference(
+        static_cast<std::uint8_t>(code), params);
+    Check(actual == expected,
+          "piecewise dequantization mismatch at code " + std::to_string(code));
+  }
+}
+
 void TestDeterminismAndInPlace() {
   const auto params = GoldenParams();
   std::vector<std::uint8_t> first(silu_benchmark::golden::kInputCodes.size());
@@ -181,6 +198,7 @@ void TestValidation() {
 int main() {
   Run("golden exact code equality", TestGoldenExactEquality);
   Run("post-SiLU boundaries ties and saturation", TestPostSiluReferenceProbes);
+  Run("piecewise dequantization exact equality", TestPiecewiseDequantization);
   Run("determinism and aliasing", TestDeterminismAndInPlace);
   Run("parameter and buffer validation", TestValidation);
   std::cout << (tests - failures) << "/" << tests << " tests passed\n";

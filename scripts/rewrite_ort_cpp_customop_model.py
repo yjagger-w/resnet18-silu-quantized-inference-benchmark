@@ -112,7 +112,7 @@ def main() -> int:
         [
             "# v1.2 custom-op graph rewrite report",
             "",
-            "Status: **graph rewrite only; custom-op build blocked**.",
+            "Status: **graph rewrite only; build and execution are separate steps**.",
             "",
             f"- Source SHA-256: `{report['source_model_sha256']}`",
             f"- Rewritten SHA-256: `{report['rewritten_model_sha256']}`",
@@ -121,9 +121,13 @@ def main() -> int:
             f"- Custom nodes added: `{graph_report['custom_nodes_added']}`",
             f"- Original selected-piecewise nodes retained: `{graph_report['original_selected_piecewise_nodes_retained']}`",
             "",
-            "No DLL, ORT custom-op session, probe parity, full-test evaluation, or benchmark was run.",
+            "This rewrite command does not build the DLL or run ORT, parity, evaluation, or timing.",
             "",
-            "Blockers: " + "; ".join(prerequisites["blockers"]),
+            "Prerequisite blockers: " + (
+                "; ".join(prerequisites["blockers"])
+                if prerequisites["blockers"]
+                else "none detected"
+            ),
             "",
             prerequisites["recommendation"],
         ]

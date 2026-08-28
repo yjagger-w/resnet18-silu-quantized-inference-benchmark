@@ -16,12 +16,25 @@ FIXTURE_HEADER = CPP / "tests/data/act_call_0_golden.h"
 class CppSiluKernelSourceTests(unittest.TestCase):
     def test_kernel_library_has_no_framework_runtime_headers(self):
         forbidden = ("torch/", "onnxruntime", "openvino", "qnn", "onnx/")
-        sources = list((CPP / "include").rglob("*")) + list((CPP / "src").rglob("*"))
-        for source in (path for path in sources if path.is_file()):
+        sources = (
+            CPP / "include/silu_benchmark/quantized_silu_kernel.h",
+            CPP / "src/quantized_silu_kernel.cpp",
+        )
+        for source in sources:
             text = source.read_text(encoding="utf-8").lower()
             for token in forbidden:
                 with self.subTest(source=source.name, token=token):
                     self.assertNotIn(token, text)
+
+    def test_ort_wrapper_is_separate_and_reuses_kernel_library(self):
+        wrapper = (CPP / "src/ort_quantized_silu_custom_op.cpp").read_text(
+            encoding="utf-8"
+        )
+        cmake = (CPP / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.assertIn("#include <onnxruntime_cxx_api.h>", wrapper)
+        self.assertIn("QuantizedSiluScalarUnchecked", wrapper)
+        self.assertIn("add_library(silu_ort_custom_op SHARED", cmake)
+        self.assertIn("silu_quantized_kernel", cmake)
 
     def test_golden_fixture_is_small_complete_and_provenanced(self):
         fixture = json.loads(FIXTURE_JSON.read_text(encoding="utf-8"))

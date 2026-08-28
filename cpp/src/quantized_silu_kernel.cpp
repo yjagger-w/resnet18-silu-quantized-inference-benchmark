@@ -192,6 +192,21 @@ std::uint8_t QuantizePostSiluReference(
       std::max(kUpperCodeStart, std::min(rounded, kUpperCodeEnd)));
 }
 
+float DequantizePiecewiseCodeReference(
+    std::uint8_t code,
+    const QuantizedSiluKernelParams& params) noexcept {
+  const auto integer_code = static_cast<std::int32_t>(code);
+  const double reconstructed =
+      integer_code <= kLowerCodeEnd
+          ? static_cast<double>(integer_code - params.lower_zero_point) *
+                params.lower_scale
+          : static_cast<double>(integer_code - params.upper_zero_point) *
+                params.upper_scale;
+  const double clipped = std::max(
+      params.output.vmin, std::min(reconstructed, params.output.vmax));
+  return static_cast<float>(clipped);
+}
+
 void QuantizedSiluScalar(
     const std::uint8_t* input,
     std::uint8_t* output,

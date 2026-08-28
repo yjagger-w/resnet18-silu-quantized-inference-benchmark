@@ -4,7 +4,7 @@ The standalone v1.0 portable C++17 quantized SiLU kernel, exact golden validatio
 
 The v1.1 controlled accuracy-recovery experiment is documented in [`docs/silu_accuracy_recovery_v11.md`](docs/silu_accuracy_recovery_v11.md). Its selected ORT functional reference reached 93.58% CIFAR-10 top-1 accuracy, versus 93.57% for the locked Standard-QDQ baseline; this is an accuracy result, not an accelerated-kernel or deployment result.
 
-The v1.2 ORT C++ custom-op design and graph contract are documented in [`docs/ort_cpp_customop_v12.md`](docs/ort_cpp_customop_v12.md). The current environment lacks the official ORT C/C++ development headers, so v1.2 is explicitly build-blocked: no DLL, custom-op execution, parity, accuracy, or performance result is claimed.
+The v1.2 ORT C++ custom-op implementation and graph contract are documented in [`docs/ort_cpp_customop_v12.md`](docs/ort_cpp_customop_v12.md). Its Windows x64 DLL reuses the v1.0 scalar kernel, executes all 17 selected activations in ORT CPU, matches the v1.1 reference exactly on the frozen 128-image probe, and reaches 93.58% on the complete CIFAR-10 test set. This is an ORT CPU hybrid graph, not integer-only whole-model inference.
 
 A lightweight quantization and deployment benchmark for **ResNet18-SiLU on CIFAR-10**, covering PyTorch FP32 evaluation, ONNX export, ONNX Runtime validation, INT8 post-training quantization, CPU latency benchmarking, quantization matrix evaluation, automatic report generation, and custom **SiLU-aware PTQ** simulation.
 

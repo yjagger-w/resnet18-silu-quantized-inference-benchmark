@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import ctypes
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -25,6 +26,13 @@ from silu_benchmark.ort_custom_op_rewrite import (
 
 
 CONFIG_SCHEMA = "ort-cpp-customop-benchmark-config/v1"
+
+# Python ORT 1.19.2 is statically linked into its extension on this Windows
+# installation, while a different onnxruntime.dll is visible in System32.
+# Keep the exact package-local runtime and directory handles alive for the
+# process so the project's import-library dependency cannot bind elsewhere.
+_DLL_DIRECTORY_HANDLES = []
+_RUNTIME_DLL_HANDLES = []
 
 
 @dataclass(frozen=True)
@@ -196,12 +204,39 @@ def load_config(path: Path) -> dict:
     return payload
 
 
-def create_custom_op_session(model_path: Path, library_path: Path):
+def _prepare_process_local_ort_runtime() -> Path | None:
+    if os.name != "nt":
+        return None
+    capi_directory = Path(ort.__file__).resolve().parent / "capi"
+    runtime_dll = capi_directory / "onnxruntime.dll"
+    if not runtime_dll.is_file():
+        raise FileNotFoundError(
+            f"Python ORT runtime DLL is missing from its package: {runtime_dll}"
+        )
+    if not _RUNTIME_DLL_HANDLES:
+        _DLL_DIRECTORY_HANDLES.append(os.add_dll_directory(str(capi_directory)))
+        _RUNTIME_DLL_HANDLES.append(ctypes.WinDLL(str(runtime_dll.resolve())))
+    return runtime_dll.resolve()
+
+
+def create_custom_op_session(
+    model_path: Path,
+    library_path: Path,
+    *,
+    enable_profiling: bool = False,
+    profile_prefix: Path | None = None,
+):
     if not model_path.is_file():
         raise FileNotFoundError(f"custom-op ONNX model is missing: {model_path}")
     if not library_path.is_file():
         raise FileNotFoundError(f"custom-op library is missing: {library_path}")
+    _prepare_process_local_ort_runtime()
     options = ort.SessionOptions()
+    if enable_profiling:
+        options.enable_profiling = True
+        if profile_prefix is not None:
+            profile_prefix.parent.mkdir(parents=True, exist_ok=True)
+            options.profile_file_prefix = str(profile_prefix.resolve())
     try:
         registered_path = options.register_custom_ops_library(str(library_path.resolve()))
     except Exception as error:
@@ -209,14 +244,14 @@ def create_custom_op_session(model_path: Path, library_path: Path):
     session = ort.InferenceSession(
         str(model_path.resolve()), sess_options=options, providers=["CPUExecutionProvider"]
     )
-    return session, registered_path
+    return session, registered_path or str(library_path.resolve())
 
 
 def parse_custom_op_profile(profile_path: Path, expected_node_names: Sequence[str]) -> dict:
     events = json.loads(profile_path.read_text(encoding="utf-8"))
     expected = set(expected_node_names)
     observed = set()
-    execution_events = []
+    execution_by_node = {}
     for event in events:
         args = event.get("args") or {}
         op_name = args.get("op_name") or args.get("op_type")
@@ -225,18 +260,32 @@ def parse_custom_op_profile(profile_path: Path, expected_node_names: Sequence[st
             (name for name in sorted(expected, key=len, reverse=True) if name in str(node_name)),
             None,
         )
-        if op_name == CUSTOM_OP_TYPE and matched is not None:
+        event_name = str(event.get("name", ""))
+        if (
+            op_name == CUSTOM_OP_TYPE
+            and matched is not None
+            and event_name.endswith("_kernel_time")
+        ):
             observed.add(matched)
-            execution_events.append(
-                {"node_name": matched, "event_name": event.get("name"), "duration": event.get("dur")}
+            row = execution_by_node.setdefault(
+                matched,
+                {
+                    "node_name": matched,
+                    "kernel_execution_count": 0,
+                    "total_duration_us": 0,
+                },
             )
+            row["kernel_execution_count"] += 1
+            row["total_duration_us"] += int(event.get("dur") or 0)
     missing = sorted(expected - observed)
     return {
         "expected_node_count": len(expected),
         "executed_node_count": len(observed),
         "all_expected_nodes_executed": not missing and len(expected) == EXPECTED_SITE_COUNT,
         "missing_node_names": missing,
-        "execution_events": execution_events,
+        "kernel_execution_evidence": [
+            execution_by_node[name] for name in sorted(execution_by_node)
+        ],
     }
 
 

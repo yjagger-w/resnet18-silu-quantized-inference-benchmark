@@ -9,6 +9,7 @@ add_library(silu_quantized_kernel STATIC
 )
 target_include_directories(silu_quantized_kernel PUBLIC include)
 target_compile_features(silu_quantized_kernel PUBLIC cxx_std_17)
+set_target_properties(silu_quantized_kernel PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 if(MSVC)
     target_compile_options(silu_quantized_kernel PRIVATE /W4 /permissive- /fp:precise)
@@ -16,6 +17,44 @@ if(MSVC)
 else()
     target_compile_options(silu_quantized_kernel PRIVATE -Wall -Wextra -Wpedantic)
     set(SILU_KERNEL_LIBRARY_FLAGS "-Wall -Wextra -Wpedantic, default ISA")
+endif()
+
+if(DEFINED ORT_ROOT AND NOT "${ORT_ROOT}" STREQUAL "")
+    if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+        message(FATAL_ERROR "The v1.2 ORT custom operator requires Windows x64")
+    endif()
+    set(ORT_INCLUDE_DIR "${ORT_ROOT}/include")
+    set(ORT_IMPORT_LIBRARY "${ORT_ROOT}/lib/onnxruntime.lib")
+    foreach(required_file
+            "${ORT_INCLUDE_DIR}/onnxruntime_c_api.h"
+            "${ORT_INCLUDE_DIR}/onnxruntime_cxx_api.h"
+            "${ORT_IMPORT_LIBRARY}")
+        if(NOT EXISTS "${required_file}")
+            message(FATAL_ERROR "Missing official ONNX Runtime SDK file: ${required_file}")
+        endif()
+    endforeach()
+
+    add_library(silu_ort_custom_op SHARED
+        src/ort_quantized_silu_custom_op.cpp
+    )
+    target_include_directories(silu_ort_custom_op PRIVATE
+        include
+        "${ORT_INCLUDE_DIR}"
+    )
+    target_link_libraries(silu_ort_custom_op PRIVATE
+        silu_quantized_kernel
+        "${ORT_IMPORT_LIBRARY}"
+    )
+    target_compile_features(silu_ort_custom_op PRIVATE cxx_std_17)
+    target_compile_definitions(silu_ort_custom_op PRIVATE
+        SILU_ORT_SDK_VERSION="1.19.2"
+    )
+    set_target_properties(silu_ort_custom_op PROPERTIES
+        OUTPUT_NAME "silu_ort_custom_op"
+    )
+    if(MSVC)
+        target_compile_options(silu_ort_custom_op PRIVATE /W4 /permissive- /fp:precise)
+    endif()
 endif()
 
 add_executable(silu_kernel_benchmark

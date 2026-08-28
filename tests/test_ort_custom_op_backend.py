@@ -20,7 +20,7 @@ from silu_benchmark.ort_custom_op_rewrite import CUSTOM_OP_TYPE
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "configs/benchmarks/resnet18_silu_cifar10_v12_ort_customop_cpu.json"
-DLL = ROOT / "artifacts/accuracy_recovery/v1.2/silu_ort_custom_op.dll"
+DLL = ROOT / "build/ort-cpp-customop/Release/silu_ort_custom_op.dll"
 MODEL = ROOT / "artifacts/accuracy_recovery/v1.2/resnet18_silu_v12_ort_cpp_customop.onnx"
 
 
