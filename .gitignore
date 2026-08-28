@@ -55,6 +55,9 @@ Thumbs.db
 
 # v1.4 generated four-thread preset profiles, timings, models, logs, and reports.
 /results/benchmarks/v1.4_ort_customop_thread_preset*/
+
+# v1.5 generated tail-latency candidates, profiles, timings, logs, and reports.
+/results/benchmarks/v1.5_ort_customop_tail_latency*/
 *.exe
 *.obj
 *.pdb
