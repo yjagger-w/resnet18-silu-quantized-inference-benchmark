@@ -35,6 +35,15 @@ Thumbs.db
 /build/
 /out/
 /results/benchmarks/v1.0_silu_kernel*/
+
+# v1.1 generated controls, calibrated candidates, models, and reports.
+/artifacts/accuracy_recovery/v1.1/
+/results/benchmarks/v1.1_accuracy_diagnosis/
+/results/benchmarks/v1.1_accuracy_recovery*/
+
+# v1.1.1 generated strict controls, instrumented audit artifacts, and reports.
+/artifacts/accuracy_recovery/v1.1.1/
+/results/benchmarks/v1.1_control_equivalence_audit/
 *.exe
 *.obj
 *.pdb

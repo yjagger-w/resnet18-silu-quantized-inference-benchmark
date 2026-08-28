@@ -2,6 +2,8 @@
 
 The standalone v1.0 portable C++17 quantized SiLU kernel, exact golden validation, and kernel-only microbenchmark are documented in [`docs/cpp_quantized_silu_kernel_v10.md`](docs/cpp_quantized_silu_kernel_v10.md). This is not a full C++ inference runtime or backend deployment claim.
 
+The v1.1 controlled accuracy-recovery experiment is documented in [`docs/silu_accuracy_recovery_v11.md`](docs/silu_accuracy_recovery_v11.md). Its selected ORT functional reference reached 93.58% CIFAR-10 top-1 accuracy, versus 93.57% for the locked Standard-QDQ baseline; this is an accuracy result, not an accelerated-kernel or deployment result.
+
 A lightweight quantization and deployment benchmark for **ResNet18-SiLU on CIFAR-10**, covering PyTorch FP32 evaluation, ONNX export, ONNX Runtime validation, INT8 post-training quantization, CPU latency benchmarking, quantization matrix evaluation, automatic report generation, and custom **SiLU-aware PTQ** simulation.
 
 This project is designed as a reproducible MVP for AI model quantization, model deployment, and inference performance evaluation.

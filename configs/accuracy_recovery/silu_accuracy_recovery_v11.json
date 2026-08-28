@@ -1,0 +1,55 @@
+{
+  "schema_version": "silu-accuracy-recovery-config/v1",
+  "seed": 20260828,
+  "provider": "CPUExecutionProvider",
+  "standard_qdq_model": "artifacts/int8/resnet18_silu_int8_v065.onnx",
+  "fp32_model": "artifacts/onnx/resnet18_silu_fp32.onnx",
+  "original_piecewise_model": "artifacts/onnx/resnet18_silu_piecewise_v065.onnx",
+  "original_piecewise_manifest": "configs/calibration/resnet18_silu_piecewise_v06_ort_cpu.json",
+  "historical_report": "results/benchmarks/v0.6.5/benchmark_results.json",
+  "data_root": "data",
+  "calibration_batch": "data_batch_1",
+  "calibration_samples": 2560,
+  "development_samples": 2000,
+  "development_batch_size": 128,
+  "probe_samples": 128,
+  "per_site_calibration_values": 200000,
+  "candidates": [
+    {
+      "candidate_id": "two_segment_p99_9_mse",
+      "method": "two-segment-piecewise-asymmetric",
+      "vmax_strategy": "percentile",
+      "vmax_percentile": 99.9,
+      "vsplit_strategy": "sample_mse_grid",
+      "vsplit_candidate_count": 128,
+      "bits": 8
+    },
+    {
+      "candidate_id": "two_segment_p99_99_mse",
+      "method": "two-segment-piecewise-asymmetric",
+      "vmax_strategy": "percentile",
+      "vmax_percentile": 99.99,
+      "vsplit_strategy": "sample_mse_grid",
+      "vsplit_candidate_count": 128,
+      "bits": 8
+    },
+    {
+      "candidate_id": "two_segment_observed_max_mse",
+      "method": "two-segment-piecewise-asymmetric",
+      "vmax_strategy": "observed_max",
+      "vsplit_strategy": "sample_mse_grid",
+      "vsplit_candidate_count": 128,
+      "bits": 8
+    }
+  ],
+  "selection_rule": {
+    "primary": "highest development top-1 accuracy",
+    "secondary": "highest prediction agreement versus Standard-QDQ",
+    "final_tiebreak": "candidate configuration order",
+    "forbidden_split": "final_test"
+  },
+  "generated_artifact_root": "artifacts/accuracy_recovery/v1.1",
+  "diagnosis_output": "results/benchmarks/v1.1_accuracy_diagnosis",
+  "development_output": "results/benchmarks/v1.1_accuracy_recovery_smoke",
+  "final_output": "results/benchmarks/v1.1_accuracy_recovery"
+}
