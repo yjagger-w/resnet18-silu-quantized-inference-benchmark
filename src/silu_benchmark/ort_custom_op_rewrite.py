@@ -526,4 +526,3 @@ def validate_generated_output_path(path: Path, repository_root: Path) -> Path:
     if not any(resolved == base or base in resolved.parents for base in (allowed, reports)):
         raise ValueError("v1.2 generated output must stay under an isolated ignored path")
     return resolved
-
