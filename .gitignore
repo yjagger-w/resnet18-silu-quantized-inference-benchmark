@@ -44,6 +44,11 @@ Thumbs.db
 # v1.1.1 generated strict controls, instrumented audit artifacts, and reports.
 /artifacts/accuracy_recovery/v1.1.1/
 /results/benchmarks/v1.1_control_equivalence_audit/
+
+# v1.2 generated custom-op models, manifests, DLLs, profiles, builds, and reports.
+/artifacts/accuracy_recovery/v1.2/
+/results/benchmarks/v1.2_ort_cpp_customop*/
+/build/ort-cpp-customop/
 *.exe
 *.obj
 *.pdb
