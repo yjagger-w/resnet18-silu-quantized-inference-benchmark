@@ -30,3 +30,12 @@ Thumbs.db
 # v0.8 generated OpenVINO IR bundles and benchmark runs (source/configs stay visible).
 /artifacts/openvino/v0.8/
 /results/benchmarks/v0.8*/
+
+# v1.0 standalone C++ SiLU kernel builds, binaries, and microbenchmarks.
+/build/
+/out/
+/results/benchmarks/v1.0_silu_kernel*/
+*.exe
+*.obj
+*.pdb
+*.ilk
