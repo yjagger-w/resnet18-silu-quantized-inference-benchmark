@@ -204,7 +204,7 @@ def load_config(path: Path) -> dict:
     return payload
 
 
-def _prepare_process_local_ort_runtime() -> Path | None:
+def prepare_process_local_ort_runtime() -> Path | None:
     if os.name != "nt":
         return None
     capi_directory = Path(ort.__file__).resolve().parent / "capi"
@@ -230,7 +230,7 @@ def create_custom_op_session(
         raise FileNotFoundError(f"custom-op ONNX model is missing: {model_path}")
     if not library_path.is_file():
         raise FileNotFoundError(f"custom-op library is missing: {library_path}")
-    _prepare_process_local_ort_runtime()
+    prepare_process_local_ort_runtime()
     options = ort.SessionOptions()
     if enable_profiling:
         options.enable_profiling = True
