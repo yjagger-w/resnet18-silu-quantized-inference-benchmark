@@ -1,0 +1,41 @@
+{
+  "schema_version": "ort-customop-thread-preset-validation/v1",
+  "ort_version": "1.19.2",
+  "preset": {
+    "schema_version": "ort-runtime-preset/v1",
+    "name": "resnet18-silu-cifar10-ort-customop-cpu-4threads",
+    "version": "1.4",
+    "provider": "CPUExecutionProvider",
+    "execution_mode": "ORT_SEQUENTIAL",
+    "intra_op_num_threads": 4,
+    "inter_op_num_threads": 0,
+    "inter_op_behavior": "ORT default; unused by ORT_SEQUENTIAL",
+    "graph_optimization_level": "ORT_ENABLE_ALL",
+    "intended_workload": "batch-1 ResNet18-SiLU CIFAR-10 CPU inference with the frozen v1.2 custom-op graph",
+    "scope_boundary": "Measured recommendation for the audited Windows x64 machine and ORT 1.19.2 only; explicit opt-in, not a global default"
+  },
+  "reference_model": "artifacts/accuracy_recovery/v1.1/candidates/two_segment_p99_99_mse.onnx",
+  "reference_model_sha256": "0df5e7f6388d39a658a53790788d20393ff3e8e481d075b85ca84a54e5821a8d",
+  "custom_model": "artifacts/accuracy_recovery/v1.2/resnet18_silu_v12_ort_cpp_customop.onnx",
+  "custom_model_sha256": "18e51fe02b1e9d5fbe6cd56f1221d052c6753b13bfc4e553755d9252b2ca09ba",
+  "custom_library": "build/ort-cpp-customop/Release/silu_ort_custom_op.dll",
+  "custom_library_sha256": "24be06487486adb9494973b60210a7b723117d2bf8e67324e6e5eaac347dedd2",
+  "data_root": "data",
+  "probe_indices": "results/benchmarks/v1.1_accuracy_diagnosis/controls.json",
+  "historical_v13_report": "results/benchmarks/v1.3_ort_customop_performance_diagnosis/diagnosis_report.json",
+  "output_root": "results/benchmarks/v1.4_ort_customop_thread_preset",
+  "exactness": {
+    "samples": 128,
+    "batch_size": 8
+  },
+  "profiling": {
+    "batch_size": 1,
+    "iterations": 10
+  },
+  "benchmark": {
+    "batch_size": 1,
+    "warmup_iterations": 20,
+    "timed_iterations": 100,
+    "repetitions": 5
+  }
+}

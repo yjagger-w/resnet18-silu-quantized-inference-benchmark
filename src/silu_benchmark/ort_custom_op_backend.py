@@ -223,6 +223,7 @@ def create_custom_op_session(
     model_path: Path,
     library_path: Path,
     *,
+    session_options: ort.SessionOptions | None = None,
     enable_profiling: bool = False,
     profile_prefix: Path | None = None,
 ):
@@ -231,7 +232,7 @@ def create_custom_op_session(
     if not library_path.is_file():
         raise FileNotFoundError(f"custom-op library is missing: {library_path}")
     prepare_process_local_ort_runtime()
-    options = ort.SessionOptions()
+    options = session_options if session_options is not None else ort.SessionOptions()
     if enable_profiling:
         options.enable_profiling = True
         if profile_prefix is not None:

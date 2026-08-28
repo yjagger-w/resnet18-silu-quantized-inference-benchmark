@@ -8,6 +8,8 @@ The v1.2 ORT C++ custom-op implementation and graph contract are documented in [
 
 The v1.3 CPU performance diagnosis is documented in [`docs/ort_cpp_customop_performance_v13.md`](docs/ort_cpp_customop_performance_v13.md). It preserves v1.2 semantics, profiles both graph forms, retains 8,000 raw timings across a bounded repeated matrix, and recommends four ORT intra-op threads on this machine. It implements no performance optimization and makes no speedup or cross-machine claim.
 
+The explicit v1.4 four-thread runtime preset and its validation evidence are documented in [`docs/ort_cpp_customop_thread_preset_v14.md`](docs/ort_cpp_customop_thread_preset_v14.md). It is an opt-in, machine-specific ORT CPU session configuration—not a global default—and preserves exact v1.2 outputs. Typical v1.3 latency was reproduced, with a recorded tail-variance caveat.
+
 A lightweight quantization and deployment benchmark for **ResNet18-SiLU on CIFAR-10**, covering PyTorch FP32 evaluation, ONNX export, ONNX Runtime validation, INT8 post-training quantization, CPU latency benchmarking, quantization matrix evaluation, automatic report generation, and custom **SiLU-aware PTQ** simulation.
 
 This project is designed as a reproducible MVP for AI model quantization, model deployment, and inference performance evaluation.
