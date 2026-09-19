@@ -17,6 +17,15 @@ from .onnx_model_rewrite import (
     save_rewrite_result,
     write_inspection_report,
 )
+from .qnn_aihub_backend import (
+    QaiHubUnavailableError,
+    QnnAiHubBackend,
+    build_numerical_audit,
+    build_profile_summary,
+    generate_audit_inputs,
+    numerical_metrics,
+    summarize_profile,
+)
 
 __all__ = [
     "PIECEWISE_ONNX_OPSET",
@@ -32,4 +41,11 @@ __all__ = [
     "rewrite_silu_piecewise_model",
     "save_rewrite_result",
     "write_inspection_report",
+    "QaiHubUnavailableError",
+    "QnnAiHubBackend",
+    "build_numerical_audit",
+    "build_profile_summary",
+    "generate_audit_inputs",
+    "numerical_metrics",
+    "summarize_profile",
 ]

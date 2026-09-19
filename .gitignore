@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.venv*/
 
 data/*
 !data/.gitkeep
@@ -58,6 +59,13 @@ Thumbs.db
 
 # v1.5 generated tail-latency candidates, profiles, timings, logs, and reports.
 /results/benchmarks/v1.5_ort_customop_tail_latency*/
+
+# v1.6 generated QNN assets/reports and local AI Hub credentials.
+/artifacts/qnn/
+/artifacts/onnx/qnn_dlc/
+*.dlc
+client.ini
+.qai_hub/
 *.exe
 *.obj
 *.pdb
