@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "recovered_utc": "2026-09-19T12:24:40.943429+00:00",
+  "device": {
+    "name": "Samsung Galaxy S22 5G",
+    "os": "12"
+  },
+  "environment": {
+    "python": "3.11.15",
+    "numpy": "2.4.6",
+    "onnxruntime": "1.30.0",
+    "qai_hub": "0.55.0"
+  },
+  "input_set": {
+    "kind": "deterministic synthetic stress inputs",
+    "seed": 20260919,
+    "sample_count": 12,
+    "shape": [
+      12,
+      3,
+      32,
+      32
+    ],
+    "sha256": "028FADACAA9AF56D706612DBFC04E08B17FDE3137B43A7F5DE94885AB5C30193",
+    "is_accuracy_dataset": false
+  },
+  "outputs_sha256": "AC03B4D82BCBA3B1C89CD45103834B731A967FA2E5CCDDFEA378FBFEB25A4644",
+  "models": {
+    "fp32": {
+      "source_path": "artifacts\\onnx\\resnet18_silu_fp32.onnx",
+      "source_sha256": "D7F0E89DFD3577FE50CCDF9FAE732C5E2BFFC2CC1BF7F942017A65C9480176DD",
+      "compile_job_id": "jp1ndxwlg",
+      "compile_job_url": "https://workbench.aihub.qualcomm.com/jobs/jp1ndxwlg/",
+      "profile_job_id": "jgjr1d7vp",
+      "profile_job_url": "https://workbench.aihub.qualcomm.com/jobs/jgjr1d7vp/",
+      "inference_job_id": "jprl97wkp",
+      "inference_job_url": "https://workbench.aihub.qualcomm.com/jobs/jprl97wkp/",
+      "local_output_shape": [
+        12,
+        10
+      ],
+      "remote_output_shape": [
+        12,
+        10
+      ],
+      "local_vs_remote": {
+        "max_abs_error": 0.024322032928466797,
+        "mean_abs_error": 0.004700018589695295,
+        "rmse": 0.006093356580286766,
+        "mean_cosine_similarity": 0.9999988081598826,
+        "min_cosine_similarity": 0.999992255007984,
+        "top1_agreement": 1.0
+      }
+    },
+    "qdq_int8": {
+      "source_path": "artifacts\\int8\\resnet18_silu_int8_v065.onnx",
+      "source_sha256": "FBA46162C6685D7D23BD6DA0A94D14BFA09F11BABFC776FD5597A9E39C41B3AC",
+      "compile_job_id": "j5qlw227p",
+      "compile_job_url": "https://workbench.aihub.qualcomm.com/jobs/j5qlw227p/",
+      "profile_job_id": "jprl9yn9p",
+      "profile_job_url": "https://workbench.aihub.qualcomm.com/jobs/jprl9yn9p/",
+      "inference_job_id": "j5m041w9g",
+      "inference_job_url": "https://workbench.aihub.qualcomm.com/jobs/j5m041w9g/",
+      "local_output_shape": [
+        12,
+        10
+      ],
+      "remote_output_shape": [
+        12,
+        10
+      ],
+      "local_vs_remote": {
+        "max_abs_error": 3.882644295692444,
+        "mean_abs_error": 0.3730978471537431,
+        "rmse": 0.6740061575613444,
+        "mean_cosine_similarity": 0.9787180484257311,
+        "min_cosine_similarity": 0.8366764812931882,
+        "top1_agreement": 1.0
+      },
+      "local_vs_fp32_local": {
+        "max_abs_error": 2.4109654426574707,
+        "mean_abs_error": 0.41409193600217503,
+        "rmse": 0.6211653786686958,
+        "mean_cosine_similarity": 0.9861537495803021,
+        "min_cosine_similarity": 0.9247931079275488,
+        "top1_agreement": 0.9166666666666666
+      }
+    },
+    "piecewise_reference": {
+      "source_path": "artifacts\\onnx\\resnet18_silu_piecewise_v065.onnx",
+      "source_sha256": "94D6B671BF3C2D860AF2521BAC14B7D6D32A8A6BD8640D0AE51805D5DF8E00A6",
+      "compile_job_id": "j568v3r7g",
+      "compile_job_url": "https://workbench.aihub.qualcomm.com/jobs/j568v3r7g/",
+      "profile_job_id": "jprl9dv0p",
+      "profile_job_url": "https://workbench.aihub.qualcomm.com/jobs/jprl9dv0p/",
+      "inference_job_id": "jp8e8dn8p",
+      "inference_job_url": "https://workbench.aihub.qualcomm.com/jobs/jp8e8dn8p/",
+      "local_output_shape": [
+        12,
+        10
+      ],
+      "remote_output_shape": [
+        12,
+        10
+      ],
+      "local_vs_remote": {
+        "max_abs_error": 0.18842089176177979,
+        "mean_abs_error": 0.018818395856457452,
+        "rmse": 0.0344077960592524,
+        "mean_cosine_similarity": 0.9998539110691818,
+        "min_cosine_similarity": 0.9989413057016272,
+        "top1_agreement": 1.0
+      },
+      "local_vs_fp32_local": {
+        "max_abs_error": 6.843201637268066,
+        "mean_abs_error": 2.1849761897853264,
+        "rmse": 2.706722820181576,
+        "mean_cosine_similarity": 0.855260095228768,
+        "min_cosine_similarity": 0.7871081831479226,
+        "top1_agreement": 0.25
+      }
+    }
+  },
+  "limitations": [
+    "This is a compiler-semantics smoke audit, not CIFAR-10 accuracy evaluation.",
+    "Top-1 agreement does not prove internal UINT8-code equality.",
+    "The piecewise model requires a standalone boundary probe for ties-to-even and code-boundary validation."
+  ]
+}
