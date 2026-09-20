@@ -122,6 +122,27 @@ python scripts/run_qnn_aihub.py cifar10-full-export `
 
 The full export retains original indices `0..9999`, evaluates only FP32 and QDQ INT8, and requires the local reference to reproduce 9374/10000, 9357/10000, and 9839/10000 prediction agreement before publishing its ignored NPZ, JSON, and Markdown outputs.
 
+After the two completed full inference outputs have been downloaded into that ignored directory, generate the permanent final report without connecting to AI Hub:
+
+```powershell
+python scripts/run_qnn_aihub.py cifar10-s22-full-report `
+  --full-dir out/qnn/v1.6/cifar10-s22-full-10000 `
+  --output-dir results/benchmarks/v1.6_qnn_cifar10_s22_full_10000
+```
+
+The manifest keeps the original 12-input synthetic inference jobs intact and separately records full-test inference jobs `jpyoq7nr5` (FP32) and `jpe78l275` (QDQ INT8), together with the expected downloaded-output hashes. The command verifies those hashes plus the ignored input, label, and local-reference artifacts before calculating the report. Its committed `predictions.npz` contains only labels, original indices, and the four local/S22 prediction vectors; images and logits remain under ignored `out/` paths.
+
+The frozen JSON, Markdown, and prediction-only archive are under [`results/benchmarks/v1.6_qnn_cifar10_s22_full_10000`](../results/benchmarks/v1.6_qnn_cifar10_s22_full_10000/full_accuracy_summary.md).
+
+The full 10,000-image result is:
+
+| Model | Local Top-1 | S22 Top-1 | Local/S22 agreement | S22 change vs FP32 |
+|---|---:|---:|---:|---:|
+| FP32 | 93.74% | 93.73% | 99.98% | baseline |
+| QDQ INT8 | 93.57% | 93.68% | 98.80% | -0.05 pp |
+
+Galaxy S22 FP32 and QDQ agree on 98.45% of predictions. QDQ's 0.11 percentage-point local-to-S22 increase must not be interpreted as quantization improving generalization: 120 predictions change between the ORT and QNN backends, while aggregate accuracy remains stable. The frozen `piecewise_v065` graph has only 82.80% local accuracy and 1.68766 ms mean latency, so it was not run on the full Galaxy S22 dataset. It remains compiler-compatibility and operator-decomposition diagnostic evidence, not the best deployment. The final recommendation is standard QDQ INT8.
+
 The confirmed comparison is:
 
 | Model | Mean latency | Inference peak memory | NPU coverage | Comparison with FP32 |

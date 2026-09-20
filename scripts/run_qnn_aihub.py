@@ -62,9 +62,11 @@ from silu_benchmark.qnn_preflight import (  # noqa: E402
 )
 from silu_benchmark.qnn_s22_accuracy import (  # noqa: E402
     S22_MODEL_ORDER,
+    build_s22_full_report,
     build_s22_preflight_report,
     load_npz_exact,
     write_s22_accuracy_outputs,
+    write_s22_full_accuracy_outputs,
 )
 
 
@@ -185,6 +187,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     full_parser.add_argument("--batch-size", type=int, default=128)
     full_parser.add_argument(
         "--output-dir", default="out/qnn/v1.6/cifar10-s22-full-10000"
+    )
+
+    full_report_parser = subparsers.add_parser(
+        "cifar10-s22-full-report",
+        help="build the final 10,000-image S22 report from downloaded outputs, fully offline",
+    )
+    full_report_parser.add_argument("--manifest", default=DEFAULT_MANIFEST)
+    full_report_parser.add_argument(
+        "--full-dir", default="out/qnn/v1.6/cifar10-s22-full-10000"
+    )
+    full_report_parser.add_argument(
+        "--output-dir",
+        default="results/benchmarks/v1.6_qnn_cifar10_s22_full_10000",
     )
     return parser.parse_args(argv)
 
@@ -824,6 +839,173 @@ def command_cifar10_full_export(args: argparse.Namespace) -> dict:
     return report
 
 
+def command_cifar10_s22_full_report(args: argparse.Namespace) -> dict:
+    """Generate the final full-test report without importing or contacting AI Hub."""
+
+    import numpy as np
+
+    manifest_path, experiment = _load_manifest_arg(args.manifest)
+    full_dir = repository_path(ROOT, args.full_dir, must_exist=True, kind="full export directory")
+    full_manifest_path = full_dir / "full_manifest.json"
+    if not full_manifest_path.is_file():
+        raise FileNotFoundError("full export manifest does not exist")
+    full_manifest = json.loads(full_manifest_path.read_text(encoding="utf-8"))
+    if full_manifest.get("schema_version") != FULL_EXPORT_SCHEMA:
+        raise ValueError(f"full export manifest schema must be {FULL_EXPORT_SCHEMA}")
+
+    inputs_path = full_dir / "inputs.npz"
+    labels_path = full_dir / "labels.npz"
+    local_reference_path = full_dir / "local_reference.npz"
+    for key, path in (
+        ("inputs", inputs_path),
+        ("labels", labels_path),
+        ("local_reference", local_reference_path),
+    ):
+        verify_sha256(path, full_manifest["artifacts"][key]["sha256"], label=key)
+
+    labels_archive = load_npz_exact(labels_path, ("labels", "original_indices"))
+    reference = load_npz_exact(
+        local_reference_path,
+        (
+            "fp32_predictions",
+            "fp32_logits",
+            "qdq_int8_predictions",
+            "qdq_int8_logits",
+        ),
+    )
+    full_config = experiment["full_cifar10_evaluation"]
+    remote_paths = {
+        model_id: repository_path(
+            ROOT,
+            full_config["models"][model_id]["remote_output_path"],
+            must_exist=True,
+            kind=f"{model_id} full remote output",
+        )
+        for model_id in S22_MODEL_ORDER
+    }
+    remote_logits = {}
+    for model_id in S22_MODEL_ORDER:
+        expected_hash = full_config["models"][model_id]["remote_output_sha256"]
+        verify_sha256(remote_paths[model_id], expected_hash, label=f"{model_id} remote output")
+        remote_logits[model_id] = load_npz_exact(remote_paths[model_id], ("output_0",))[
+            "output_0"
+        ]
+
+    local_logits = {
+        "fp32": reference["fp32_logits"],
+        "qdq_int8": reference["qdq_int8_logits"],
+    }
+    for model_id in S22_MODEL_ORDER:
+        expected = np.argmax(local_logits[model_id], axis=1).astype(np.int64)
+        if not np.array_equal(reference[f"{model_id}_predictions"], expected):
+            raise ValueError(f"stored {model_id} local predictions do not match local logits")
+
+    profile_paths = {
+        model_id: repository_path(
+            ROOT,
+            experiment["models"][model_id]["profile_path"],
+            must_exist=True,
+            kind=f"{model_id} profile",
+        )
+        for model_id in experiment["models"]
+    }
+    profile_payloads = {
+        model_id: json.loads(path.read_text(encoding="utf-8"))
+        for model_id, path in profile_paths.items()
+    }
+    profile_summary = build_profile_summary(profile_payloads)
+    fp32_profile = profile_summary["models"]["fp32"]
+    qdq_profile = profile_summary["models"]["qdq_int8"]
+    fp32_peak_mib = fp32_profile["memory_bytes"]["inference_peak"] / (1024 * 1024)
+    qdq_peak_mib = qdq_profile["memory_bytes"]["inference_peak"] / (1024 * 1024)
+    performance = {
+        "fp32": {
+            "mean_latency_ms": fp32_profile["latency_ms"]["mean"],
+            "peak_memory_mib": fp32_peak_mib,
+            "npu_nodes": fp32_profile["nodes"]["npu"],
+            "total_nodes": fp32_profile["nodes"]["total"],
+        },
+        "qdq_int8": {
+            "mean_latency_ms": qdq_profile["latency_ms"]["mean"],
+            "speedup_vs_fp32": profile_summary["comparisons"]["qdq_int8_vs_fp32"][
+                "speedup"
+            ],
+            "peak_memory_mib": qdq_peak_mib,
+            "memory_reduction_vs_fp32_percent": 100.0
+            * (1.0 - qdq_peak_mib / fp32_peak_mib),
+            "npu_nodes": qdq_profile["nodes"]["npu"],
+            "total_nodes": qdq_profile["nodes"]["total"],
+        },
+    }
+    jobs = {
+        model_id: {
+            "compile": experiment["models"][model_id]["jobs"]["compile"],
+            "profile": experiment["models"][model_id]["jobs"]["profile"],
+            "inference": validate_job_id(
+                full_config["models"][model_id]["inference_job"]
+            ),
+        }
+        for model_id in S22_MODEL_ORDER
+    }
+    provenance = {
+        "experiment_manifest": {
+            "path": relative_path(ROOT, manifest_path),
+            "sha256": local_sha256_file(manifest_path),
+        },
+        "full_export_manifest": {
+            "path": relative_path(ROOT, full_manifest_path),
+            "sha256": local_sha256_file(full_manifest_path),
+        },
+        "inputs": {
+            "path": relative_path(ROOT, inputs_path),
+            "sha256": local_sha256_file(inputs_path),
+        },
+        "labels": {
+            "path": relative_path(ROOT, labels_path),
+            "sha256": local_sha256_file(labels_path),
+        },
+        "local_reference": {
+            "path": relative_path(ROOT, local_reference_path),
+            "sha256": local_sha256_file(local_reference_path),
+        },
+        "remote_outputs": {
+            model_id: {
+                "path": relative_path(ROOT, remote_paths[model_id]),
+                "sha256": local_sha256_file(remote_paths[model_id]),
+            }
+            for model_id in S22_MODEL_ORDER
+        },
+        "profiles": {
+            model_id: {
+                "path": relative_path(ROOT, profile_paths[model_id]),
+                "sha256": local_sha256_file(profile_paths[model_id]),
+            }
+            for model_id in S22_MODEL_ORDER
+        },
+        "models": {
+            model_id: {
+                "path": experiment["models"][model_id]["source_path"],
+                "sha256": experiment["models"][model_id]["source_sha256"],
+            }
+            for model_id in S22_MODEL_ORDER
+        },
+    }
+    report, predictions = build_s22_full_report(
+        labels=labels_archive["labels"],
+        original_indices=labels_archive["original_indices"],
+        local_logits=local_logits,
+        remote_logits=remote_logits,
+        provenance=provenance,
+        jobs=jobs,
+        selection=full_manifest["selection"],
+        performance=performance,
+    )
+    payload, _ = write_s22_full_accuracy_outputs(
+        _output_dir(args.output_dir), report, predictions
+    )
+    return payload
+
+
 COMMANDS = {
     "compile": command_compile,
     "profile": command_profile,
@@ -834,6 +1016,7 @@ COMMANDS = {
     "cifar10-preflight": command_cifar10_preflight,
     "cifar10-s22-report": command_cifar10_s22_report,
     "cifar10-full-export": command_cifar10_full_export,
+    "cifar10-s22-full-report": command_cifar10_s22_full_report,
 }
 
 
@@ -849,6 +1032,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Wrote S22 accuracy JSON, Markdown, and predictions under {Path(args.output_dir).as_posix()}")
         elif args.command == "cifar10-full-export":
             print(f"Wrote full-test NPZ, JSON, and Markdown under {Path(args.output_dir).as_posix()}")
+        elif args.command == "cifar10-s22-full-report":
+            print(
+                "Wrote final S22 full-test accuracy JSON, Markdown, and predictions under "
+                f"{Path(args.output_dir).as_posix()}"
+            )
         else:
             print(f"Wrote JSON and Markdown under {Path(args.output_dir).as_posix()}")
         return 0

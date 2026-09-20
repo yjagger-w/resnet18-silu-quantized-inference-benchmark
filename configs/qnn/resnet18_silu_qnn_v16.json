@@ -66,6 +66,22 @@
       }
     }
   },
+  "full_cifar10_evaluation": {
+    "sample_count": 10000,
+    "selection_rule": "all official CIFAR-10 test_batch samples in original order 0 through 9999",
+    "models": {
+      "fp32": {
+        "inference_job": "jpyoq7nr5",
+        "remote_output_path": "out/qnn/v1.6/cifar10-s22-full-10000/fp32_remote/outputs.npz",
+        "remote_output_sha256": "3F586D571E3E6D972CC806AD4E4A217150708E0A258AF8C755506BBDE63D0078"
+      },
+      "qdq_int8": {
+        "inference_job": "jpe78l275",
+        "remote_output_path": "out/qnn/v1.6/cifar10-s22-full-10000/qdq_int8_remote/outputs.npz",
+        "remote_output_sha256": "3A5ADB12524FE7BBC2193C7688210993C78B44F35F9A0D647D917FDC8901A75D"
+      }
+    }
+  },
   "numerical_audit": {
     "inputs": "results/benchmarks/v1.6_qnn_numerical_audit_s22_android12/audit_inputs.npz",
     "outputs": "results/benchmarks/v1.6_qnn_numerical_audit_s22_android12/audit_outputs.npz",

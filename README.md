@@ -14,9 +14,9 @@ The v1.6 Qualcomm AI Hub QNN toolchain is documented in [`docs/qnn_aihub_backend
 
 The same v1.6 CLI also provides a fully offline `cifar10-accuracy` command for reproducible local ONNX Runtime CPU evaluation of the three frozen source models on the complete 10,000-image CIFAR-10 test set. These local results establish a baseline for later device work; they are not Galaxy S22 QNN accuracy and the command creates no AI Hub task.
 
-For later Galaxy S22 inference, `cifar10-preflight` deterministically exports an ignored, class-balanced 1,000-image normalized NPZ plus FP32/QDQ local ORT references. It uses the same verified CIFAR-10 loader and preprocessing as the full local baseline and performs no network operation.
+For Galaxy S22 inference, `cifar10-preflight` deterministically exports an ignored, class-balanced 1,000-image normalized NPZ plus FP32/QDQ local ORT references. It uses the same verified CIFAR-10 loader and preprocessing as the full local baseline and performs no network operation.
 
-`cifar10-s22-report` converts already-downloaded device outputs into a permanent accuracy/numerical comparison without contacting AI Hub, while `cifar10-full-export` prepares the corresponding complete 10,000-image FP32/QDQ input and local-reference package in the ignored `out/` tree.
+`cifar10-s22-report` converts already-downloaded device outputs into a permanent accuracy/numerical comparison without contacting AI Hub, while `cifar10-full-export` prepares the corresponding complete 10,000-image FP32/QDQ input and local-reference package in the ignored `out/` tree. The offline `cifar10-s22-full-report` command freezes the [completed full-test result](results/benchmarks/v1.6_qnn_cifar10_s22_full_10000/full_accuracy_summary.md): FP32 reaches 93.73% on Galaxy S22 and standard QDQ INT8 reaches 93.68% (-0.05 percentage points) with 0.40647 ms mean latency, a 2.027x speedup over FP32. Standard QDQ INT8 is the recommended deployment; the lower-accuracy, slower piecewise graph remains diagnostic evidence only.
 
 A lightweight quantization and deployment benchmark for **ResNet18-SiLU on CIFAR-10**, covering PyTorch FP32 evaluation, ONNX export, ONNX Runtime validation, INT8 post-training quantization, CPU latency benchmarking, quantization matrix evaluation, automatic report generation, and custom **SiLU-aware PTQ** simulation.
 

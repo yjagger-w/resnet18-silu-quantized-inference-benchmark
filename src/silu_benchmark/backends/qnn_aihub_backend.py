@@ -179,6 +179,26 @@ def validate_manifest(payload: Mapping[str, Any]) -> dict:
         output_keys = model.get("audit_output_keys")
         if not isinstance(output_keys, Mapping) or set(output_keys) != {"local", "remote"}:
             raise ValueError(f"{model_id} audit output keys are missing")
+    full_evaluation = payload.get("full_cifar10_evaluation")
+    if not isinstance(full_evaluation, Mapping) or full_evaluation.get("sample_count") != 10000:
+        raise ValueError("full CIFAR-10 evaluation must describe 10000 samples")
+    full_models = full_evaluation.get("models")
+    if not isinstance(full_models, Mapping) or tuple(full_models) != ("fp32", "qdq_int8"):
+        raise ValueError("full CIFAR-10 evaluation must contain ordered FP32 and QDQ models")
+    for model_id, model in full_models.items():
+        if not isinstance(model, Mapping):
+            raise ValueError(f"invalid full CIFAR-10 model entry: {model_id}")
+        validate_job_id(model.get("inference_job", ""))
+        output_path = model.get("remote_output_path")
+        if (
+            not isinstance(output_path, str)
+            or Path(output_path).is_absolute()
+            or ".." in Path(output_path).parts
+        ):
+            raise ValueError(f"{model_id} full remote output path must be repository-relative")
+        digest = model.get("remote_output_sha256")
+        if not isinstance(digest, str) or not re.fullmatch(r"[A-Fa-f0-9]{64}", digest):
+            raise ValueError(f"invalid full remote output digest for {model_id}")
     audit = payload.get("numerical_audit")
     if not isinstance(audit, Mapping):
         raise ValueError("numerical audit paths are missing")

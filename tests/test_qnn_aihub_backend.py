@@ -120,6 +120,14 @@ class QnnAiHubBackendTests(unittest.TestCase):
             ],
         )
         self.assertEqual(manifest["environment"]["qai_hub"], "0.55.0")
+        self.assertEqual(
+            manifest["full_cifar10_evaluation"]["models"]["fp32"]["inference_job"],
+            "jpyoq7nr5",
+        )
+        self.assertEqual(
+            manifest["full_cifar10_evaluation"]["models"]["qdq_int8"]["inference_job"],
+            "jpe78l275",
+        )
         changed = json.loads(MANIFEST.read_text(encoding="utf-8"))
         changed["seed"] = 1
         with self.assertRaisesRegex(ValueError, "20260919"):
@@ -283,6 +291,7 @@ class QnnAiHubBackendTests(unittest.TestCase):
             "cifar10-preflight",
             "cifar10-s22-report",
             "cifar10-full-export",
+            "cifar10-s22-full-report",
         ):
             args = runner.parse_args([command, "--job-id", "jtest"] if command in {"profile", "inference"} else [command])
             self.assertEqual(args.command, command)
