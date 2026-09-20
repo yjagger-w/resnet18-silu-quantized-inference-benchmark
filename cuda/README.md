@@ -5,7 +5,8 @@ benchmark. It is intentionally independent from the existing `cpp/` project
 so the CPU and CUDA baselines can be configured and tested separately.
 
 The first milestone establishes a minimal vector-add kernel, a checked host
-launch interface, and a correctness test. It does not claim performance
+launch interface, and a correctness test. The second milestone adds a
+shared-memory sum-reduction baseline. Neither milestone claims performance
 results.
 
 ## Requirements
@@ -41,10 +42,19 @@ ctest \
 ```
 
 When the CUDA Toolkit is installed but no GPU is attached, configuration and
-compilation remain valid. The runtime test performs its host-side contract
+compilation remain valid. Each runtime test performs its host-side contract
 checks and then reports a CTest skip using exit code 77. With a T4 attached,
-the same test executes the kernel and verifies every output element against a
-CPU reference.
+the tests execute their kernels and compare the device results with CPU
+references.
+
+## Reduction baseline
+
+The reduction kernel loads two input elements per thread, combines values
+within each block through shared memory and `__syncthreads()`, and uses one
+global `atomicAdd` per block. This is intentionally a learning baseline rather
+than the final performance implementation. A later milestone will compare it
+with hierarchical and two-pass reductions that avoid the global atomic
+bottleneck.
 
 Performance measurements, CUDA Event timing, vectorized loads, FP16, and fused
 Bias+SiLU kernels belong to later milestones.

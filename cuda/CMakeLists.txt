@@ -15,6 +15,7 @@ if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
 endif()
 
 add_library(silu_cuda_kernels STATIC
+    kernels/reduction.cu
     kernels/vector_add.cu
 )
 target_include_directories(silu_cuda_kernels PUBLIC
@@ -50,8 +51,24 @@ if(BUILD_TESTING)
         cuda_std_17
     )
 
+    add_executable(test_cuda_reduction
+        tests/test_reduction.cu
+    )
+    target_link_libraries(test_cuda_reduction PRIVATE
+        silu_cuda_kernels
+        CUDA::cudart
+    )
+    target_compile_features(test_cuda_reduction PRIVATE
+        cxx_std_17
+        cuda_std_17
+    )
+
     add_test(NAME cuda_vector_add COMMAND test_cuda_vector_add)
-    set_tests_properties(cuda_vector_add PROPERTIES
+    add_test(NAME cuda_reduction COMMAND test_cuda_reduction)
+    set_tests_properties(
+        cuda_vector_add
+        cuda_reduction
+        PROPERTIES
         SKIP_RETURN_CODE 77
     )
 endif()
