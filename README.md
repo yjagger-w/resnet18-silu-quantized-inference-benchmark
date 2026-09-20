@@ -1,5 +1,23 @@
 # ResNet18-SiLU Quantized Inference Benchmark
 
+The standalone v1.0 portable C++17 quantized SiLU kernel, exact golden validation, and kernel-only microbenchmark are documented in [`docs/cpp_quantized_silu_kernel_v10.md`](docs/cpp_quantized_silu_kernel_v10.md). This is not a full C++ inference runtime or backend deployment claim.
+
+The v1.1 controlled accuracy-recovery experiment is documented in [`docs/silu_accuracy_recovery_v11.md`](docs/silu_accuracy_recovery_v11.md). Its selected ORT functional reference reached 93.58% CIFAR-10 top-1 accuracy, versus 93.57% for the locked Standard-QDQ baseline; this is an accuracy result, not an accelerated-kernel or deployment result.
+
+The v1.2 ORT C++ custom-op implementation and graph contract are documented in [`docs/ort_cpp_customop_v12.md`](docs/ort_cpp_customop_v12.md). Its Windows x64 DLL reuses the v1.0 scalar kernel, executes all 17 selected activations in ORT CPU, matches the v1.1 reference exactly on the frozen 128-image probe, and reaches 93.58% on the complete CIFAR-10 test set. This is an ORT CPU hybrid graph, not integer-only whole-model inference.
+
+The v1.3 CPU performance diagnosis is documented in [`docs/ort_cpp_customop_performance_v13.md`](docs/ort_cpp_customop_performance_v13.md). It preserves v1.2 semantics, profiles both graph forms, retains 8,000 raw timings across a bounded repeated matrix, and recommends four ORT intra-op threads on this machine. It implements no performance optimization and makes no speedup or cross-machine claim.
+
+The explicit v1.4 four-thread runtime preset and its validation evidence are documented in [`docs/ort_cpp_customop_thread_preset_v14.md`](docs/ort_cpp_customop_thread_preset_v14.md). It is an opt-in, machine-specific ORT CPU session configuration—not a global default—and preserves exact v1.2 outputs. Typical v1.3 latency was reproduced, with a recorded tail-variance caveat.
+
+The v1.6 Qualcomm AI Hub QNN toolchain is documented in [`docs/qnn_aihub_backend_v16.md`](docs/qnn_aihub_backend_v16.md). It organizes the existing Galaxy S22 / Android 12 compile, profile, inference, and numerical-audit evidence behind a resumable CLI and an offline-tested backend. QDQ INT8 averages 0.40647 ms (2.027x faster than FP32); the piecewise reference averages 1.68766 ms with 374/374 NPU nodes, but is 104.82% slower than FP32. The 12-input synthetic audit is not a CIFAR-10 accuracy evaluation and does not prove internal UINT8 code equality.
+
+The same v1.6 CLI also provides a fully offline `cifar10-accuracy` command for reproducible local ONNX Runtime CPU evaluation of the three frozen source models on the complete 10,000-image CIFAR-10 test set. These local results establish a baseline for later device work; they are not Galaxy S22 QNN accuracy and the command creates no AI Hub task.
+
+For Galaxy S22 inference, `cifar10-preflight` deterministically exports an ignored, class-balanced 1,000-image normalized NPZ plus FP32/QDQ local ORT references. It uses the same verified CIFAR-10 loader and preprocessing as the full local baseline and performs no network operation.
+
+`cifar10-s22-report` converts already-downloaded device outputs into a permanent accuracy/numerical comparison without contacting AI Hub, while `cifar10-full-export` prepares the corresponding complete 10,000-image FP32/QDQ input and local-reference package in the ignored `out/` tree. The offline `cifar10-s22-full-report` command freezes the [completed full-test result](results/benchmarks/v1.6_qnn_cifar10_s22_full_10000/full_accuracy_summary.md): FP32 reaches 93.73% on Galaxy S22 and standard QDQ INT8 reaches 93.68% (-0.05 percentage points) with 0.40647 ms mean latency, a 2.027x speedup over FP32. Standard QDQ INT8 is the recommended deployment; the lower-accuracy, slower piecewise graph remains diagnostic evidence only.
+
 A lightweight quantization and deployment benchmark for **ResNet18-SiLU on CIFAR-10**, covering PyTorch FP32 evaluation, ONNX export, ONNX Runtime validation, INT8 post-training quantization, CPU latency benchmarking, quantization matrix evaluation, automatic report generation, and custom **SiLU-aware PTQ** simulation.
 
 This project is designed as a reproducible MVP for AI model quantization, model deployment, and inference performance evaluation.
@@ -132,6 +150,46 @@ Key observation:
 | Accuracy drop reduction | 1.8600 pp → 0.7700 pp |
 
 The SiLU-aware method improves over the NCNN-style activation quantization simulation, but the current PyTorch-side simulation is not directly equivalent to the ONNX Runtime QDQ INT8 graph. Therefore, standard ORT PTQ and SiLU-aware PTQ are reported as separate evaluation tracks.
+
+The repository also contains a standalone ONNX standard-operator reference subgraph for the locked SiLU piecewise contract. It returns uint8 codes and float32 reconstructed values, but is not standard single-scale QDQ and does not claim INT8 acceleration. See `docs/quantization_spec.md` for its contract and validation command.
+
+## SiLU Piecewise Full-Model Reference
+
+The Phase 3 path exports the FP32 ResNet18-SiLU model, discovers only exact `Mul(x, Sigmoid(x))` SiLU patterns, binds a valid `PiecewiseQuantizationSpec` to every exported call site, rewrites each pattern with the verified reference subgraph, checks it, runs it on ONNX Runtime CPU, and writes a JSON capability report. In the current exporter there are 17 call sites: the nine configured SiLU modules include eight residual-block modules invoked twice.
+
+```powershell
+python scripts/export_onnx.py --checkpoint checkpoints/resnet18_cifar10.pth --output artifacts/onnx/resnet18_silu_fp32.onnx --opset 18
+python scripts/rewrite_silu_piecewise_onnx.py --spec-manifest path\to\site_specs.json
+python scripts/inspect_onnx_model.py --model artifacts/onnx/resnet18_silu_piecewise_reference.onnx --report results/silu_piecewise_onnx_report.json
+```
+
+The manifest must contain a `sites` list with exactly one `{site_id, vmin, vsplit, vmax, bits}` entry for every discovered site. It is an explicit calibration artifact; the historical threshold JSON is not a valid Phase 3 manifest because it predates the locked positive-`Vsplit` contract. Generated ONNX models under `artifacts/onnx/` and JSON reports under `results/` are intentionally untracked.
+
+This is a functional ONNX Runtime reference: it retains float64 internal arithmetic to preserve reference rounding, remains separate from the standard QDQ baseline, and is not evidence of OpenVINO/QNN portability or end-to-end INT8 performance.
+
+### Phase 3.1 calibrated manifest
+
+`configs/calibration/resnet18_silu_piecewise_v06.json` is the versioned v0.6 calibration manifest. It records 17 runtime call sites (nine modules, with shared block activations represented by invocation ordinal), the real checkpoint digest, deterministic CIFAR-10 training indices, and the canonical positive-`Vsplit` parameters plus auditable derived fields. Generate it with the real local assets:
+
+```powershell
+python scripts/generate_silu_piecewise_manifest.py `
+  --checkpoint checkpoints\resnet18_cifar10.pth `
+  --data-root data `
+  --batch-size 128 `
+  --num-calibration-batches 20 `
+  --seed 20260826 `
+  --output configs\calibration\resnet18_silu_piecewise_v06.json
+```
+
+The legacy `results/silu_aware_thresholds.json` is retained unchanged as historical evidence, but is deliberately rejected as a v0.6 manifest: it was produced before the locked contract and stores negative `Vsplit` values. The real closure command uses a separately selected CIFAR-10 test image for numerical comparison only; it does not measure accuracy:
+
+```powershell
+python scripts/validate_silu_piecewise_full_model.py --manifest configs\calibration\resnet18_silu_piecewise_v06.json
+```
+
+### Phase 3.2 boundary diagnostic
+
+Use `scripts/diagnose_silu_piecewise_mismatch.py` to create an ignored JSON report with per-call-site pre-SiLU, SiLU-expression, code, reconstruction, and rounding-margin diagnostics. The real fixed-input result localizes the first code difference to `layer1.0.act.call_1`: a `2.38e-7` PyTorch/ORT pre-activation difference crosses an upper-segment half-integer rounding boundary, producing codes 128 and 129. This is retained as boundary-sensitivity evidence, not hidden by a tolerance change. Future work must explicitly choose a new validation/reference policy (for example an ORT-native reference or a formally specified boundary-stability policy); the locked v0.6 contract is unchanged.
 
 ## Project Structure
 
@@ -403,6 +461,17 @@ Integrated a custom SiLU-aware PTQ simulation with KLD-based `Vmax` search, MSE-
 Improved ResNet18-SiLU INT8 simulation accuracy from 91.88% with NCNN-style activation quantization to 92.97% using SiLU-aware PTQ, reducing accuracy drop from 1.86 pp to 0.77 pp.
 
 ## License
+
+## ORT-native calibration and closure
+
+`configs/calibration/resnet18_silu_piecewise_v06_ort_cpu.json` is separate from the PyTorch-origin manifest. It records activation statistics collected from actual baseline ONNX `Sigmoid → Mul` SiLU outputs on `CPUExecutionProvider`, including model digest, provider/runtime versions, and the ordered 17-site identity.
+
+```powershell
+python scripts/generate_silu_piecewise_ort_manifest.py --output configs\calibration\resnet18_silu_piecewise_v06_ort_cpu.json
+python scripts/validate_silu_piecewise_ort_native.py --manifest configs\calibration\resnet18_silu_piecewise_v06_ort_cpu.json
+```
+
+Validation applies the canonical Python Q/DQ reference to the exact ORT-produced pre-Q/DQ SiLU tensors and compares each result with the embedded ONNX subgraph. This is same-backend functional closure only; it does not remove the documented PyTorch-versus-ORT boundary sensitivity, prove portability, or claim INT8 acceleration.
 
 This project is released under the MIT License. See [LICENSE](LICENSE) for details.
 

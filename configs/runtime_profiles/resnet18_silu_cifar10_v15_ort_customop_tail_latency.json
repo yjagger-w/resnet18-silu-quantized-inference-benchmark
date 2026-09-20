@@ -1,0 +1,41 @@
+{
+  "schema_version": "ort-customop-tail-latency-diagnosis/v1",
+  "ort_version": "1.19.2",
+  "reference_model": "artifacts/accuracy_recovery/v1.1/candidates/two_segment_p99_99_mse.onnx",
+  "reference_model_sha256": "0df5e7f6388d39a658a53790788d20393ff3e8e481d075b85ca84a54e5821a8d",
+  "custom_model": "artifacts/accuracy_recovery/v1.2/resnet18_silu_v12_ort_cpp_customop.onnx",
+  "custom_model_sha256": "18e51fe02b1e9d5fbe6cd56f1221d052c6753b13bfc4e553755d9252b2ca09ba",
+  "custom_library": "build/ort-cpp-customop/Release/silu_ort_custom_op.dll",
+  "custom_library_sha256": "24be06487486adb9494973b60210a7b723117d2bf8e67324e6e5eaac347dedd2",
+  "data_root": "data",
+  "probe_indices": "results/benchmarks/v1.1_accuracy_diagnosis/controls.json",
+  "historical_v14_report": "results/benchmarks/v1.4_ort_customop_thread_preset/validation_report.json",
+  "historical_v14_raw_timings": "results/benchmarks/v1.4_ort_customop_thread_preset/raw_timings.csv",
+  "output_root": "results/benchmarks/v1.5_ort_customop_tail_latency",
+  "include_nearby_thread_controls": true,
+  "exactness": {
+    "samples": 128,
+    "batch_size": 8
+  },
+  "baseline_benchmark": {
+    "batch_size": 1,
+    "warmup_iterations": 20,
+    "timed_iterations": 100,
+    "repetitions": 10
+  },
+  "screening_benchmark": {
+    "batch_size": 1,
+    "warmup_iterations": 20,
+    "timed_iterations": 100,
+    "repetitions": 5
+  },
+  "finalist_confirmation": {
+    "warmup_iterations": 20,
+    "timed_iterations": 100,
+    "repetitions_per_arm": 10
+  },
+  "profiling": {
+    "iterations": 10,
+    "baseline_profiles": 2
+  }
+}

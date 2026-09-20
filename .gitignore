@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.venv*/
 
 data/*
 !data/.gitkeep
@@ -18,7 +19,54 @@ results/*.csv
 results/*.json
 results/*.txt
 
+# Generated v0.6.5 runs (including smoke and partial runs); never source/templates.
+/results/benchmarks/v0.6.5*/
+
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+/results/benchmarks/v0.6.5_console.log
+
+# v0.8 generated OpenVINO IR bundles and benchmark runs (source/configs stay visible).
+/artifacts/openvino/v0.8/
+/results/benchmarks/v0.8*/
+
+# v1.0 standalone C++ SiLU kernel builds, binaries, and microbenchmarks.
+/build/
+/out/
+/results/benchmarks/v1.0_silu_kernel*/
+
+# v1.1 generated controls, calibrated candidates, models, and reports.
+/artifacts/accuracy_recovery/v1.1/
+/results/benchmarks/v1.1_accuracy_diagnosis/
+/results/benchmarks/v1.1_accuracy_recovery*/
+
+# v1.1.1 generated strict controls, instrumented audit artifacts, and reports.
+/artifacts/accuracy_recovery/v1.1.1/
+/results/benchmarks/v1.1_control_equivalence_audit/
+
+# v1.2 generated custom-op models, manifests, DLLs, profiles, builds, and reports.
+/artifacts/accuracy_recovery/v1.2/
+/results/benchmarks/v1.2_ort_cpp_customop*/
+/build/ort-cpp-customop/
+
+# v1.3 generated ORT CPU profiles, benchmark samples, logs, and reports.
+/results/benchmarks/v1.3_ort_customop_performance_diagnosis*/
+
+# v1.4 generated four-thread preset profiles, timings, models, logs, and reports.
+/results/benchmarks/v1.4_ort_customop_thread_preset*/
+
+# v1.5 generated tail-latency candidates, profiles, timings, logs, and reports.
+/results/benchmarks/v1.5_ort_customop_tail_latency*/
+
+# v1.6 generated QNN assets/reports and local AI Hub credentials.
+/artifacts/qnn/
+/artifacts/onnx/qnn_dlc/
+*.dlc
+client.ini
+.qai_hub/
+*.exe
+*.obj
+*.pdb
+*.ilk

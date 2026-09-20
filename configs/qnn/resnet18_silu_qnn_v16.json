@@ -1,0 +1,99 @@
+{
+  "schema_version": "qnn-aihub-experiments/v1.6",
+  "seed": 20260919,
+  "device": {
+    "name": "Samsung Galaxy S22 5G",
+    "os": "12"
+  },
+  "input_specs": {
+    "images": {
+      "shape": [1, 3, 32, 32],
+      "dtype": "float32"
+    }
+  },
+  "compile_options": "--target_runtime qnn_dlc",
+  "environment": {
+    "python": "3.11.15",
+    "numpy": "2.4.6",
+    "onnx": "1.19.1",
+    "onnxruntime": "1.30.0",
+    "qai_hub": "0.55.0"
+  },
+  "models": {
+    "fp32": {
+      "label": "FP32 source",
+      "source_path": "artifacts/onnx/resnet18_silu_fp32.onnx",
+      "source_sha256": "D7F0E89DFD3577FE50CCDF9FAE732C5E2BFFC2CC1BF7F942017A65C9480176DD",
+      "jobs": {
+        "compile": "jp1ndxwlg",
+        "profile": "jgjr1d7vp",
+        "inference": "jprl97wkp"
+      },
+      "profile_path": "results/benchmarks/v1.6_qnn_fp32_s22_android12/profile.json",
+      "audit_output_keys": {
+        "local": "fp32_local",
+        "remote": "fp32_remote"
+      }
+    },
+    "qdq_int8": {
+      "label": "QDQ INT8",
+      "source_path": "artifacts/int8/resnet18_silu_int8_v065.onnx",
+      "source_sha256": "FBA46162C6685D7D23BD6DA0A94D14BFA09F11BABFC776FD5597A9E39C41B3AC",
+      "jobs": {
+        "compile": "j5qlw227p",
+        "profile": "jprl9yn9p",
+        "inference": "j5m041w9g"
+      },
+      "profile_path": "results/benchmarks/v1.6_qnn_int8_s22_android12/profile.json",
+      "audit_output_keys": {
+        "local": "qdq_int8_local",
+        "remote": "qdq_int8_remote"
+      }
+    },
+    "piecewise_reference": {
+      "label": "Piecewise reference",
+      "source_path": "artifacts/onnx/resnet18_silu_piecewise_v065.onnx",
+      "source_sha256": "94D6B671BF3C2D860AF2521BAC14B7D6D32A8A6BD8640D0AE51805D5DF8E00A6",
+      "jobs": {
+        "compile": "j568v3r7g",
+        "profile": "jprl9dv0p",
+        "inference": "jp8e8dn8p"
+      },
+      "profile_path": "results/benchmarks/v1.6_qnn_piecewise_reference_s22_android12/profile.json",
+      "audit_output_keys": {
+        "local": "piecewise_reference_local",
+        "remote": "piecewise_reference_remote"
+      }
+    }
+  },
+  "full_cifar10_evaluation": {
+    "sample_count": 10000,
+    "selection_rule": "all official CIFAR-10 test_batch samples in original order 0 through 9999",
+    "models": {
+      "fp32": {
+        "inference_job": "jpyoq7nr5",
+        "remote_output_path": "out/qnn/v1.6/cifar10-s22-full-10000/fp32_remote/outputs.npz",
+        "remote_output_sha256": "3F586D571E3E6D972CC806AD4E4A217150708E0A258AF8C755506BBDE63D0078"
+      },
+      "qdq_int8": {
+        "inference_job": "jpe78l275",
+        "remote_output_path": "out/qnn/v1.6/cifar10-s22-full-10000/qdq_int8_remote/outputs.npz",
+        "remote_output_sha256": "3A5ADB12524FE7BBC2193C7688210993C78B44F35F9A0D647D917FDC8901A75D"
+      }
+    }
+  },
+  "numerical_audit": {
+    "inputs": "results/benchmarks/v1.6_qnn_numerical_audit_s22_android12/audit_inputs.npz",
+    "outputs": "results/benchmarks/v1.6_qnn_numerical_audit_s22_android12/audit_outputs.npz",
+    "baseline_json": "results/benchmarks/v1.6_qnn_numerical_audit_s22_android12/numerical_audit.json",
+    "baseline_markdown": "results/benchmarks/v1.6_qnn_numerical_audit_s22_android12/numerical_audit_summary.md"
+  },
+  "validated_conclusions": {
+    "qdq_int8_mean_ms": 0.40647,
+    "qdq_int8_speedup_vs_fp32": 2.027,
+    "piecewise_reference_mean_ms": 1.68766,
+    "piecewise_reference_npu_nodes": 374,
+    "piecewise_reference_total_nodes": 374,
+    "piecewise_reference_slower_vs_fp32_percent": 104.82
+  }
+}

@@ -1,0 +1,6 @@
+# Separate, validated v1.6 QNN/AI Hub environment. Do not merge this into the
+# original PyTorch/ORT baseline environment in requirements.txt.
+numpy==2.4.6
+onnx==1.19.1
+onnxruntime==1.30.0
+qai-hub==0.55.0

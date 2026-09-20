@@ -1,0 +1,22 @@
+{
+  "schema_version": "ort-cpp-customop-benchmark-config/v1",
+  "provider": "CPUExecutionProvider",
+  "ort_version": "1.19.2",
+  "custom_domain": "com.yjagger.silu",
+  "custom_op_type": "QuantizedPiecewiseSiLU",
+  "custom_opset_version": 1,
+  "expected_site_count": 17,
+  "selected_model": "artifacts/accuracy_recovery/v1.1/candidates/two_segment_p99_99_mse.onnx",
+  "selected_model_sha256": "0df5e7f6388d39a658a53790788d20393ff3e8e481d075b85ca84a54e5821a8d",
+  "selection_receipt": "results/benchmarks/v1.1_accuracy_recovery_smoke/selection_receipt.json",
+  "data_root": "data",
+  "probe_samples": 128,
+  "final_test_samples": 10000,
+  "generated_artifact_root": "artifacts/accuracy_recovery/v1.2",
+  "generated_report_root": "results/benchmarks/v1.2_ort_cpp_customop",
+  "benchmark": {
+    "batch_size": 1,
+    "warmup_iterations": 20,
+    "timed_iterations": 100
+  }
+}

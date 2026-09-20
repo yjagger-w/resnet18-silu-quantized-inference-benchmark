@@ -81,7 +81,11 @@ def insert_silu_aware_quantizers(model, thresholds, bits=8):
                 nn.Sequential(
                     module,
                     ActivationQuantizerSiLUAware(
-                        layer_thresholds["vmax"], layer_thresholds["vsplit"], bits, use_ste=False
+                        layer_thresholds["vmax"],
+                        layer_thresholds["vsplit"],
+                        bits,
+                        use_ste=False,
+                        vmin=layer_thresholds.get("vmin"),
                     ),
                 ),
             )

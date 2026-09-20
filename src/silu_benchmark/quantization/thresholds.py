@@ -3,6 +3,7 @@
 import numpy as np
 
 from silu_benchmark.config import QuantizationConfig
+from silu_benchmark.quantization.activation import PiecewiseQuantizationSpec, piecewise_quantize_dequantize
 
 
 def ncnn_kld_threshold_optimized(data, num_bins=2048, target_bins=128, percentile=99.99):
@@ -73,38 +74,16 @@ def ncnn_kld_threshold_optimized(data, num_bins=2048, target_bins=128, percentil
     return (best_threshold_idx + 0.5) * bin_width
 
 
-def _fake_quant_silu(data, vmax, vsplit, bits):
-    qmax = 2 ** bits - 1
-    vmax = max(float(vmax), 1e-6)
-    vsplit = min(float(vsplit), -1e-6)
-    out = np.zeros_like(data, dtype=np.float64)
-
-    pos_mask = data >= 0
-    if np.any(pos_mask):
-        pos = np.clip(data[pos_mask], 0.0, vmax)
-        pos_scale = vmax / qmax
-        out[pos_mask] = np.round(pos / pos_scale) * pos_scale
-
-    neg_mask = data < 0
-    if np.any(neg_mask):
-        neg = np.clip(data[neg_mask], vsplit, 0.0)
-        neg_scale = abs(vsplit) / qmax
-        out[neg_mask] = np.round(neg / neg_scale) * neg_scale
-
-    return out
+def _fake_quant_silu(data, vmin, vmax, vsplit, bits):
+    return piecewise_quantize_dequantize(data, PiecewiseQuantizationSpec(vmin, vsplit, vmax, bits))
 
 
 def mse_split_threshold(data, vmax, bits=8, num_candidates=128):
-    neg_data = data[data < 0]
-    if len(neg_data) == 0:
-        return 0.0
-
-    neg_min = float(np.min(neg_data))
-    if neg_min >= -1e-6:
-        return -1e-6
-
-    candidates = np.linspace(neg_min, -1e-6, num_candidates)
-    best_split = neg_min
+    if len(data) == 0 or not np.any(data < 0) or vmax <= 1e-6:
+        raise ValueError("SiLU calibration requires negative values and positive Vmax")
+    vmin = float(np.min(data))
+    candidates = np.linspace(0.05 * vmax, 0.8 * vmax, num_candidates)
+    best_split = float(candidates[0])
     best_mse = float("inf")
     eval_data = data
     if len(eval_data) > 200000:
@@ -112,7 +91,7 @@ def mse_split_threshold(data, vmax, bits=8, num_candidates=128):
         eval_data = eval_data[indices]
 
     for candidate in candidates:
-        recon = _fake_quant_silu(eval_data, vmax, candidate, bits)
+        recon = _fake_quant_silu(eval_data, vmin, vmax, candidate, bits)
         mse = np.mean((eval_data - recon) ** 2)
         if mse < best_mse:
             best_mse = mse
@@ -138,4 +117,7 @@ def compute_silu_aware_thresholds(data, config=None):
         percentile=config.percentile,
     )
     vsplit = mse_split_threshold(data, vmax, bits=config.bits)
-    return {"vmax": float(vmax), "vsplit": float(vsplit)}
+    vmin = float(np.min(data)) if len(data) else -float(vmax)
+    if not vmin < vsplit:
+        vmin = min(vmin, float(vsplit) - 1e-6)
+    return {"vmin": vmin, "vmax": float(vmax), "vsplit": float(vsplit)}
