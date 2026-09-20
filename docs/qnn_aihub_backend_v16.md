@@ -56,6 +56,27 @@ python scripts/run_qnn_aihub.py numerical-audit `
 
 Each command writes JSON and Markdown. Profile analysis reads all 100 retained timing samples per model and computes mean, P50, P90, P95, P99, minimum, and maximum. It also reports inference peak memory, per-compute-unit node counts, NPU coverage, and every non-NPU node.
 
+The full local CIFAR-10 accuracy baseline is also an offline command. It verifies the three source-model hashes from the manifest, verifies their `images`/`logits` float32 contracts, reads the official local `test_batch` in file order, and runs all 10,000 images through ONNX Runtime CPU:
+
+```powershell
+python scripts/run_qnn_aihub.py cifar10-accuracy `
+  --data-root data `
+  --batch-size 128 `
+  --output-dir results/benchmarks/v1.6_qnn_cifar10_local_accuracy
+```
+
+This writes `local_accuracy.json`, `local_accuracy_summary.md`, and the compact `predictions.npz`. The archive contains labels, predictions, error indices, and pairwise disagreement indices only; it does not contain CIFAR-10 images. The command does not import the AI Hub SDK, contact AI Hub, or create a remote task. Its results are local ORT CPU accuracy, not Galaxy S22 QNN accuracy. The frozen `piecewise_v065` graph is always evaluated as-is even if its accuracy is lower.
+
+The recorded local baseline in [`results/benchmarks/v1.6_qnn_cifar10_local_accuracy`](../results/benchmarks/v1.6_qnn_cifar10_local_accuracy/local_accuracy_summary.md) used ONNX Runtime 1.30.0 and `CPUExecutionProvider`:
+
+| Model | Correct / total | Top-1 | Change vs FP32 | Agreement vs FP32 |
+|---|---:|---:|---:|---:|
+| FP32 | 9374 / 10000 | 93.7400% | +0.0000 pp | 100.0000% |
+| QDQ INT8 | 9357 / 10000 | 93.5700% | -0.1700 pp | 98.3900% |
+| Piecewise reference | 8280 / 10000 | 82.8000% | -10.9400 pp | 84.7700% |
+
+All three runs completed with zero inference-failed samples and zero non-finite logits. The JSON and NPZ retain the complete zero-based error and disagreement index lists.
+
 The confirmed comparison is:
 
 | Model | Mean latency | Inference peak memory | NPU coverage | Comparison with FP32 |

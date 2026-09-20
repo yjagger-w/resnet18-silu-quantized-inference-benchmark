@@ -12,6 +12,8 @@ The explicit v1.4 four-thread runtime preset and its validation evidence are doc
 
 The v1.6 Qualcomm AI Hub QNN toolchain is documented in [`docs/qnn_aihub_backend_v16.md`](docs/qnn_aihub_backend_v16.md). It organizes the existing Galaxy S22 / Android 12 compile, profile, inference, and numerical-audit evidence behind a resumable CLI and an offline-tested backend. QDQ INT8 averages 0.40647 ms (2.027x faster than FP32); the piecewise reference averages 1.68766 ms with 374/374 NPU nodes, but is 104.82% slower than FP32. The 12-input synthetic audit is not a CIFAR-10 accuracy evaluation and does not prove internal UINT8 code equality.
 
+The same v1.6 CLI also provides a fully offline `cifar10-accuracy` command for reproducible local ONNX Runtime CPU evaluation of the three frozen source models on the complete 10,000-image CIFAR-10 test set. These local results establish a baseline for later device work; they are not Galaxy S22 QNN accuracy and the command creates no AI Hub task.
+
 A lightweight quantization and deployment benchmark for **ResNet18-SiLU on CIFAR-10**, covering PyTorch FP32 evaluation, ONNX export, ONNX Runtime validation, INT8 post-training quantization, CPU latency benchmarking, quantization matrix evaluation, automatic report generation, and custom **SiLU-aware PTQ** simulation.
 
 This project is designed as a reproducible MVP for AI model quantization, model deployment, and inference performance evaluation.

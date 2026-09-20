@@ -274,7 +274,13 @@ class QnnAiHubBackendTests(unittest.TestCase):
         compile_args = runner.parse_args(["compile", "--job-id", "jc0mpile"])
         self.assertEqual(compile_args.options, "--target_runtime qnn_dlc")
         self.assertEqual((compile_args.device, compile_args.os_version), (qnn.DEFAULT_DEVICE, "12"))
-        for command in ("profile", "inference", "numerical-audit", "profile-summary"):
+        for command in (
+            "profile",
+            "inference",
+            "numerical-audit",
+            "profile-summary",
+            "cifar10-accuracy",
+        ):
             args = runner.parse_args([command, "--job-id", "jtest"] if command in {"profile", "inference"} else [command])
             self.assertEqual(args.command, command)
 

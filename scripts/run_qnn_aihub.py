@@ -34,6 +34,16 @@ from silu_benchmark.backends.qnn_aihub_backend import (  # noqa: E402
     wait_for_success,
     write_reports,
 )
+from silu_benchmark.benchmark_data import load_cifar_batch  # noqa: E402
+from silu_benchmark.qnn_local_accuracy import (  # noqa: E402
+    MODEL_ORDER,
+    build_report as build_local_accuracy_report,
+    evaluate_session as evaluate_local_accuracy_session,
+    sha256_file as local_sha256_file,
+    validate_model_io,
+    verify_sha256,
+    write_accuracy_outputs,
+)
 
 
 DEFAULT_MANIFEST = "configs/qnn/resnet18_silu_qnn_v16.json"
@@ -96,6 +106,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="override a profile with model_id=repository/relative/profile.json",
     )
     summary_parser.add_argument("--output-dir", default="out/qnn/v1.6/profile-summary")
+
+    accuracy_parser = subparsers.add_parser(
+        "cifar10-accuracy",
+        help="evaluate the three frozen source models locally with ORT CPU",
+    )
+    accuracy_parser.add_argument("--manifest", default=DEFAULT_MANIFEST)
+    accuracy_parser.add_argument("--data-root", default="data")
+    accuracy_parser.add_argument("--batch-size", type=int, default=128)
+    accuracy_parser.add_argument(
+        "--output-dir",
+        default="results/benchmarks/v1.6_qnn_cifar10_local_accuracy",
+    )
     return parser.parse_args(argv)
 
 
@@ -341,12 +363,70 @@ def command_profile_summary(args: argparse.Namespace) -> dict:
     return summary
 
 
+def command_cifar10_accuracy(args: argparse.Namespace) -> dict:
+    import onnxruntime as ort
+
+    manifest_path, manifest = _load_manifest_arg(args.manifest)
+    if args.batch_size <= 0:
+        raise ValueError("--batch-size must be positive")
+    data_root = repository_path(ROOT, args.data_root, must_exist=True, kind="data root")
+    test_batch_path = data_root / "cifar-10-batches-py" / "test_batch"
+    images, labels = load_cifar_batch(data_root, "test_batch")
+    if images.shape != (10000, 3, 32, 32) or labels.shape != (10000,):
+        raise ValueError("local accuracy requires the complete 10,000-sample CIFAR-10 test set")
+    if "CPUExecutionProvider" not in ort.get_available_providers():
+        raise RuntimeError("ONNX Runtime CPUExecutionProvider is unavailable")
+
+    model_results = {}
+    predictions = {}
+    for model_id in MODEL_ORDER:
+        model_config = manifest["models"][model_id]
+        model_path = repository_path(
+            ROOT, model_config["source_path"], must_exist=True, kind=f"{model_id} model"
+        )
+        digest = verify_sha256(
+            model_path, model_config["source_sha256"], label=f"{model_id} model"
+        )
+        session = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
+        io_contract = validate_model_io(session)
+        metrics, model_predictions = evaluate_local_accuracy_session(
+            session, images, labels, batch_size=args.batch_size
+        )
+        model_results[model_id] = {
+            "label": model_config["label"],
+            "path": relative_path(ROOT, model_path),
+            "sha256": digest,
+            "io": io_contract,
+            **metrics,
+        }
+        predictions[model_id] = model_predictions
+        del session
+
+    report = build_local_accuracy_report(
+        manifest_path=relative_path(ROOT, manifest_path),
+        manifest_sha256=local_sha256_file(manifest_path),
+        data_root=relative_path(ROOT, data_root),
+        test_batch_path=relative_path(ROOT, test_batch_path),
+        test_batch_sha256=local_sha256_file(test_batch_path),
+        images=images,
+        labels=labels,
+        batch_size=args.batch_size,
+        ort_version=ort.__version__,
+        available_providers=ort.get_available_providers(),
+        model_results=model_results,
+        predictions=predictions,
+    )
+    write_accuracy_outputs(_output_dir(args.output_dir), report, predictions, labels)
+    return report
+
+
 COMMANDS = {
     "compile": command_compile,
     "profile": command_profile,
     "inference": command_inference,
     "numerical-audit": command_numerical_audit,
     "profile-summary": command_profile_summary,
+    "cifar10-accuracy": command_cifar10_accuracy,
 }
 
 
@@ -354,7 +434,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         COMMANDS[args.command](args)
-        print(f"Wrote JSON and Markdown under {Path(args.output_dir).as_posix()}")
+        if args.command == "cifar10-accuracy":
+            print(f"Wrote JSON, Markdown, and predictions NPZ under {Path(args.output_dir).as_posix()}")
+        else:
+            print(f"Wrote JSON and Markdown under {Path(args.output_dir).as_posix()}")
         return 0
     except (ValueError, FileNotFoundError, QaiHubUnavailableError) as error:
         print(f"error: {error}", file=sys.stderr)
