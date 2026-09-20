@@ -14,6 +14,8 @@ The v1.6 Qualcomm AI Hub QNN toolchain is documented in [`docs/qnn_aihub_backend
 
 The same v1.6 CLI also provides a fully offline `cifar10-accuracy` command for reproducible local ONNX Runtime CPU evaluation of the three frozen source models on the complete 10,000-image CIFAR-10 test set. These local results establish a baseline for later device work; they are not Galaxy S22 QNN accuracy and the command creates no AI Hub task.
 
+For later Galaxy S22 inference, `cifar10-preflight` deterministically exports an ignored, class-balanced 1,000-image normalized NPZ plus FP32/QDQ local ORT references. It uses the same verified CIFAR-10 loader and preprocessing as the full local baseline and performs no network operation.
+
 A lightweight quantization and deployment benchmark for **ResNet18-SiLU on CIFAR-10**, covering PyTorch FP32 evaluation, ONNX export, ONNX Runtime validation, INT8 post-training quantization, CPU latency benchmarking, quantization matrix evaluation, automatic report generation, and custom **SiLU-aware PTQ** simulation.
 
 This project is designed as a reproducible MVP for AI model quantization, model deployment, and inference performance evaluation.

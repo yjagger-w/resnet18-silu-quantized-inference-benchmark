@@ -77,6 +77,29 @@ The recorded local baseline in [`results/benchmarks/v1.6_qnn_cifar10_local_accur
 
 All three runs completed with zero inference-failed samples and zero non-finite logits. The JSON and NPZ retain the complete zero-based error and disagreement index lists.
 
+### Galaxy S22 CIFAR-10 preflight export
+
+Prepare a deterministic balanced 1,000-image input package before any device inference:
+
+```powershell
+python scripts/run_qnn_aihub.py cifar10-preflight `
+  --data-root data `
+  --batch-size 128 `
+  --output-dir out/qnn/v1.6/cifar10-s22-preflight-1000
+```
+
+The offline command scans the official test batch in original order, retaining a record while its class has fewer than 100 selected samples. The resulting indices remain strictly increasing, every class has exactly 100 samples, and the same shared `qnn_local_accuracy` loader and preprocessing implementation is used. It evaluates only FP32 and QDQ INT8 with local ONNX Runtime CPU; the piecewise graph is excluded.
+
+The ignored output directory contains:
+
+- `inputs.npz`: `images` float32 `[1000, 3, 32, 32]`, directly accepted by the existing `inference --inputs` interface;
+- `labels.npz`: int64 `labels` and `original_indices`;
+- `local_reference.npz`: FP32/QDQ predictions and logits;
+- `preflight_manifest.json`: selection provenance, hashes, model/job identities, runtime, metrics, array contracts, and validation gates;
+- `preflight_summary.md`: a human-readable local preflight summary.
+
+The NPZ writer fixes archive metadata and records canonical dtype/shape/content hashes, so repeated exports are byte-stable as well as array-stable. No raw uint8 CIFAR-10 image, credential, or remote output is written. This command does not import the AI Hub SDK, connect to AI Hub, or create a task.
+
 The confirmed comparison is:
 
 | Model | Mean latency | Inference peak memory | NPU coverage | Comparison with FP32 |

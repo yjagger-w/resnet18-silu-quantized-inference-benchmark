@@ -12,7 +12,7 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 
-from .benchmark_data import BATCH_MD5, MEAN, STD, normalize_cifar_images
+from .benchmark_data import BATCH_MD5, MEAN, STD, load_cifar_batch, normalize_cifar_images
 
 
 REPORT_SCHEMA = "qnn-local-cifar10-accuracy/v1.6"
@@ -20,6 +20,37 @@ DATASET_FINGERPRINT_SCHEMA = b"cifar10-ordered-samples/v1\0"
 MODEL_ORDER = ("fp32", "qdq_int8", "piecewise_reference")
 EXPECTED_INPUT = {"name": "images", "shape": ["batch_size", 3, 32, 32], "type": "tensor(float)"}
 EXPECTED_OUTPUT = {"name": "logits", "shape": ["batch_size", 10], "type": "tensor(float)"}
+
+
+def load_cifar10_test_set(data_root: Path) -> tuple[np.ndarray, np.ndarray]:
+    """Load the verified official test batch used by all local QNN accuracy tools."""
+
+    images, labels = load_cifar_batch(Path(data_root), "test_batch")
+    if images.shape != (10000, 3, 32, 32) or labels.shape != (10000,):
+        raise ValueError("CIFAR-10 test set must contain exactly 10,000 NCHW samples")
+    return images, labels
+
+
+def preprocessing_metadata(*, randomness: str) -> dict[str, Any]:
+    """Describe the single shared training/history-compatible preprocessing path."""
+
+    return {
+        "source": "silu_benchmark.data.cifar10_transform / silu_benchmark.benchmark_data.normalize_cifar_images",
+        "input_layout": "NCHW",
+        "channel_order": "RGB",
+        "source_dtype": "uint8",
+        "output_dtype": "float32",
+        "operations": [
+            "cast uint8 to float32",
+            "divide by float32(255.0)",
+            "subtract per-channel float32 mean",
+            "divide by per-channel float32 standard deviation",
+        ],
+        "mean": list(MEAN),
+        "standard_deviation": list(STD),
+        "random_seed": None,
+        "randomness": randomness,
+    }
 
 
 def sha256_bytes(value: bytes) -> str:
@@ -269,23 +300,9 @@ def build_report(
             "ordered_dataset_fingerprint_sha256": ordered_dataset_fingerprint(images, labels),
             "order": "official test_batch record order, zero-based indices 0..9999",
         },
-        "preprocessing": {
-            "source": "silu_benchmark.data.cifar10_transform / silu_benchmark.benchmark_data.normalize_cifar_images",
-            "input_layout": "NCHW",
-            "channel_order": "RGB",
-            "source_dtype": "uint8",
-            "output_dtype": "float32",
-            "operations": [
-                "cast uint8 to float32",
-                "divide by float32(255.0)",
-                "subtract per-channel float32 mean",
-                "divide by per-channel float32 standard deviation",
-            ],
-            "mean": list(MEAN),
-            "standard_deviation": list(STD),
-            "random_seed": None,
-            "randomness": "none; shuffle is disabled and all 10,000 records are evaluated in file order",
-        },
+        "preprocessing": preprocessing_metadata(
+            randomness="none; shuffle is disabled and all 10,000 records are evaluated in file order"
+        ),
         "runtime": {
             "python": platform.python_version(),
             "python_implementation": platform.python_implementation(),

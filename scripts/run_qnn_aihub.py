@@ -34,15 +34,26 @@ from silu_benchmark.backends.qnn_aihub_backend import (  # noqa: E402
     wait_for_success,
     write_reports,
 )
-from silu_benchmark.benchmark_data import load_cifar_batch  # noqa: E402
 from silu_benchmark.qnn_local_accuracy import (  # noqa: E402
     MODEL_ORDER,
     build_report as build_local_accuracy_report,
     evaluate_session as evaluate_local_accuracy_session,
+    load_cifar10_test_set,
+    ordered_dataset_fingerprint,
+    prediction_agreement,
+    preprocessing_metadata,
     sha256_file as local_sha256_file,
     validate_model_io,
     verify_sha256,
     write_accuracy_outputs,
+)
+from silu_benchmark.qnn_preflight import (  # noqa: E402
+    PREFLIGHT_SCHEMA,
+    PREFLIGHT_MODEL_ORDER,
+    evaluate_preprocessed_session,
+    prepare_preflight_subset,
+    selection_manifest,
+    write_preflight_outputs,
 )
 
 
@@ -117,6 +128,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     accuracy_parser.add_argument(
         "--output-dir",
         default="results/benchmarks/v1.6_qnn_cifar10_local_accuracy",
+    )
+
+    preflight_parser = subparsers.add_parser(
+        "cifar10-preflight",
+        help="export a deterministic balanced CIFAR-10 subset and local ORT references",
+    )
+    preflight_parser.add_argument("--manifest", default=DEFAULT_MANIFEST)
+    preflight_parser.add_argument("--data-root", default="data")
+    preflight_parser.add_argument("--batch-size", type=int, default=128)
+    preflight_parser.add_argument("--samples-per-class", type=int, default=100)
+    preflight_parser.add_argument(
+        "--output-dir",
+        default="out/qnn/v1.6/cifar10-s22-preflight-1000",
     )
     return parser.parse_args(argv)
 
@@ -371,9 +395,7 @@ def command_cifar10_accuracy(args: argparse.Namespace) -> dict:
         raise ValueError("--batch-size must be positive")
     data_root = repository_path(ROOT, args.data_root, must_exist=True, kind="data root")
     test_batch_path = data_root / "cifar-10-batches-py" / "test_batch"
-    images, labels = load_cifar_batch(data_root, "test_batch")
-    if images.shape != (10000, 3, 32, 32) or labels.shape != (10000,):
-        raise ValueError("local accuracy requires the complete 10,000-sample CIFAR-10 test set")
+    images, labels = load_cifar10_test_set(data_root)
     if "CPUExecutionProvider" not in ort.get_available_providers():
         raise RuntimeError("ONNX Runtime CPUExecutionProvider is unavailable")
 
@@ -420,6 +442,124 @@ def command_cifar10_accuracy(args: argparse.Namespace) -> dict:
     return report
 
 
+def command_cifar10_preflight(args: argparse.Namespace) -> dict:
+    import numpy as np
+    import onnxruntime as ort
+
+    manifest_path, experiment = _load_manifest_arg(args.manifest)
+    if args.batch_size <= 0:
+        raise ValueError("--batch-size must be positive")
+    if args.samples_per_class != 100:
+        raise ValueError("v1.6 Galaxy S22 preflight requires exactly 100 samples per class")
+    data_root = repository_path(ROOT, args.data_root, must_exist=True, kind="data root")
+    test_batch_path = data_root / "cifar-10-batches-py" / "test_batch"
+    full_images, full_labels = load_cifar10_test_set(data_root)
+    inputs, labels, original_indices = prepare_preflight_subset(
+        full_images, full_labels, samples_per_class=args.samples_per_class
+    )
+    if "CPUExecutionProvider" not in ort.get_available_providers():
+        raise RuntimeError("ONNX Runtime CPUExecutionProvider is unavailable")
+
+    model_results = {}
+    reference_arrays = {}
+    for model_id in PREFLIGHT_MODEL_ORDER:
+        model_config = experiment["models"][model_id]
+        model_path = repository_path(
+            ROOT, model_config["source_path"], must_exist=True, kind=f"{model_id} model"
+        )
+        digest = verify_sha256(
+            model_path, model_config["source_sha256"], label=f"{model_id} model"
+        )
+        session = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
+        io_contract = validate_model_io(session)
+        metrics, predictions, logits = evaluate_preprocessed_session(
+            session, inputs, labels, batch_size=args.batch_size
+        )
+        model_results[model_id] = {
+            "label": model_config["label"],
+            "path": relative_path(ROOT, model_path),
+            "sha256": digest,
+            "compile_job_id": model_config["jobs"]["compile"],
+            "io": io_contract,
+            **metrics,
+        }
+        reference_arrays[f"{model_id}_predictions"] = predictions
+        reference_arrays[f"{model_id}_logits"] = logits
+        del session
+
+    comparison = prediction_agreement(
+        reference_arrays["fp32_predictions"], reference_arrays["qdq_int8_predictions"]
+    )
+    selection = selection_manifest(
+        full_images,
+        full_labels,
+        labels,
+        original_indices,
+        samples_per_class=args.samples_per_class,
+    )
+    validations = {
+        "each_class_has_exactly_100_samples": selection["class_counts"]
+        == {str(label): 100 for label in range(10)},
+        "original_indices_are_unique": selection["indices_are_unique"],
+        "original_indices_are_strictly_increasing": selection[
+            "indices_are_strictly_increasing"
+        ],
+        "input_and_label_order_matches_test_batch": selection["labels_match_original_order"],
+        "all_inputs_are_finite": bool(np.all(np.isfinite(inputs))),
+        "all_logits_are_finite": all(
+            bool(np.all(np.isfinite(reference_arrays[f"{model_id}_logits"])))
+            for model_id in PREFLIGHT_MODEL_ORDER
+        ),
+    }
+    manifest_base = {
+        "schema_version": PREFLIGHT_SCHEMA,
+        "scope": "offline data export and local ONNX Runtime CPU reference",
+        "statements": {
+            "ai_hub_connected": False,
+            "ai_hub_tasks_created": False,
+            "is_galaxy_s22_qnn_accuracy": False,
+            "piecewise_reference_included": False,
+        },
+        "provenance": {
+            "experiment_manifest_path": relative_path(ROOT, manifest_path),
+            "experiment_manifest_sha256": local_sha256_file(manifest_path),
+            "test_batch_path": relative_path(ROOT, test_batch_path),
+            "test_batch_sha256": local_sha256_file(test_batch_path),
+        },
+        "dataset": {
+            "name": "CIFAR-10",
+            "split": "test",
+            "sample_count": int(len(full_labels)),
+            "ordered_dataset_fingerprint_sha256": ordered_dataset_fingerprint(
+                full_images, full_labels
+            ),
+        },
+        "selection": selection,
+        "preprocessing": preprocessing_metadata(
+            randomness="none; deterministic balanced prefix selection in official test_batch order"
+        ),
+        "runtime": {
+            "numpy": np.__version__,
+            "onnxruntime": ort.__version__,
+            "requested_providers": ["CPUExecutionProvider"],
+            "available_providers": ort.get_available_providers(),
+            "batch_size": args.batch_size,
+        },
+        "models": model_results,
+        "prediction_comparison": comparison,
+        "validations": validations,
+    }
+    report, _ = write_preflight_outputs(
+        _output_dir(args.output_dir),
+        inputs=inputs,
+        labels=labels,
+        original_indices=original_indices,
+        local_reference=reference_arrays,
+        manifest_base=manifest_base,
+    )
+    return report
+
+
 COMMANDS = {
     "compile": command_compile,
     "profile": command_profile,
@@ -427,6 +567,7 @@ COMMANDS = {
     "numerical-audit": command_numerical_audit,
     "profile-summary": command_profile_summary,
     "cifar10-accuracy": command_cifar10_accuracy,
+    "cifar10-preflight": command_cifar10_preflight,
 }
 
 
@@ -436,6 +577,8 @@ def main(argv: list[str] | None = None) -> int:
         COMMANDS[args.command](args)
         if args.command == "cifar10-accuracy":
             print(f"Wrote JSON, Markdown, and predictions NPZ under {Path(args.output_dir).as_posix()}")
+        elif args.command == "cifar10-preflight":
+            print(f"Wrote preflight NPZ, JSON, and Markdown under {Path(args.output_dir).as_posix()}")
         else:
             print(f"Wrote JSON and Markdown under {Path(args.output_dir).as_posix()}")
         return 0
