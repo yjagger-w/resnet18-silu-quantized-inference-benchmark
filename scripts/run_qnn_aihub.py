@@ -31,6 +31,7 @@ from silu_benchmark.backends.qnn_aihub_backend import (  # noqa: E402
     repository_path,
     sha256_file,
     summarize_profile,
+    validate_job_id,
     wait_for_success,
     write_reports,
 )
@@ -48,12 +49,22 @@ from silu_benchmark.qnn_local_accuracy import (  # noqa: E402
     write_accuracy_outputs,
 )
 from silu_benchmark.qnn_preflight import (  # noqa: E402
+    FULL_EXPORT_SCHEMA,
     PREFLIGHT_SCHEMA,
     PREFLIGHT_MODEL_ORDER,
     evaluate_preprocessed_session,
+    full_export_markdown,
+    full_selection_manifest,
+    prepare_full_test_set,
     prepare_preflight_subset,
     selection_manifest,
     write_preflight_outputs,
+)
+from silu_benchmark.qnn_s22_accuracy import (  # noqa: E402
+    S22_MODEL_ORDER,
+    build_s22_preflight_report,
+    load_npz_exact,
+    write_s22_accuracy_outputs,
 )
 
 
@@ -141,6 +152,39 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     preflight_parser.add_argument(
         "--output-dir",
         default="out/qnn/v1.6/cifar10-s22-preflight-1000",
+    )
+
+    s22_report_parser = subparsers.add_parser(
+        "cifar10-s22-report",
+        help="compare downloaded S22 outputs with the deterministic local preflight reference",
+    )
+    s22_report_parser.add_argument("--manifest", default=DEFAULT_MANIFEST)
+    s22_report_parser.add_argument(
+        "--preflight-dir", default="out/qnn/v1.6/cifar10-s22-preflight-1000"
+    )
+    s22_report_parser.add_argument(
+        "--fp32-remote", default="out/qnn/v1.6/cifar10-s22-preflight-1000/fp32_remote/outputs.npz"
+    )
+    s22_report_parser.add_argument(
+        "--qdq-int8-remote",
+        default="out/qnn/v1.6/cifar10-s22-preflight-1000/qdq_int8_remote/outputs.npz",
+    )
+    s22_report_parser.add_argument("--fp32-inference-job-id", default="jp0mdve2g")
+    s22_report_parser.add_argument("--qdq-int8-inference-job-id", default="jgolo4e4g")
+    s22_report_parser.add_argument(
+        "--output-dir",
+        default="results/benchmarks/v1.6_qnn_cifar10_s22_preflight_1000",
+    )
+
+    full_parser = subparsers.add_parser(
+        "cifar10-full-export",
+        help="export all 10,000 CIFAR-10 test inputs and local FP32/QDQ ORT references",
+    )
+    full_parser.add_argument("--manifest", default=DEFAULT_MANIFEST)
+    full_parser.add_argument("--data-root", default="data")
+    full_parser.add_argument("--batch-size", type=int, default=128)
+    full_parser.add_argument(
+        "--output-dir", default="out/qnn/v1.6/cifar10-s22-full-10000"
     )
     return parser.parse_args(argv)
 
@@ -442,6 +486,36 @@ def command_cifar10_accuracy(args: argparse.Namespace) -> dict:
     return report
 
 
+def _evaluate_export_models(experiment, inputs, labels, batch_size, ort):
+    model_results = {}
+    reference_arrays = {}
+    for model_id in PREFLIGHT_MODEL_ORDER:
+        model_config = experiment["models"][model_id]
+        model_path = repository_path(
+            ROOT, model_config["source_path"], must_exist=True, kind=f"{model_id} model"
+        )
+        digest = verify_sha256(
+            model_path, model_config["source_sha256"], label=f"{model_id} model"
+        )
+        session = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
+        io_contract = validate_model_io(session)
+        metrics, predictions, logits = evaluate_preprocessed_session(
+            session, inputs, labels, batch_size=batch_size
+        )
+        model_results[model_id] = {
+            "label": model_config["label"],
+            "path": relative_path(ROOT, model_path),
+            "sha256": digest,
+            "compile_job_id": model_config["jobs"]["compile"],
+            "io": io_contract,
+            **metrics,
+        }
+        reference_arrays[f"{model_id}_predictions"] = predictions
+        reference_arrays[f"{model_id}_logits"] = logits
+        del session
+    return model_results, reference_arrays
+
+
 def command_cifar10_preflight(args: argparse.Namespace) -> dict:
     import numpy as np
     import onnxruntime as ort
@@ -460,32 +534,9 @@ def command_cifar10_preflight(args: argparse.Namespace) -> dict:
     if "CPUExecutionProvider" not in ort.get_available_providers():
         raise RuntimeError("ONNX Runtime CPUExecutionProvider is unavailable")
 
-    model_results = {}
-    reference_arrays = {}
-    for model_id in PREFLIGHT_MODEL_ORDER:
-        model_config = experiment["models"][model_id]
-        model_path = repository_path(
-            ROOT, model_config["source_path"], must_exist=True, kind=f"{model_id} model"
-        )
-        digest = verify_sha256(
-            model_path, model_config["source_sha256"], label=f"{model_id} model"
-        )
-        session = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
-        io_contract = validate_model_io(session)
-        metrics, predictions, logits = evaluate_preprocessed_session(
-            session, inputs, labels, batch_size=args.batch_size
-        )
-        model_results[model_id] = {
-            "label": model_config["label"],
-            "path": relative_path(ROOT, model_path),
-            "sha256": digest,
-            "compile_job_id": model_config["jobs"]["compile"],
-            "io": io_contract,
-            **metrics,
-        }
-        reference_arrays[f"{model_id}_predictions"] = predictions
-        reference_arrays[f"{model_id}_logits"] = logits
-        del session
+    model_results, reference_arrays = _evaluate_export_models(
+        experiment, inputs, labels, args.batch_size, ort
+    )
 
     comparison = prediction_agreement(
         reference_arrays["fp32_predictions"], reference_arrays["qdq_int8_predictions"]
@@ -560,6 +611,219 @@ def command_cifar10_preflight(args: argparse.Namespace) -> dict:
     return report
 
 
+def command_cifar10_s22_report(args: argparse.Namespace) -> dict:
+    import numpy as np
+
+    manifest_path, experiment = _load_manifest_arg(args.manifest)
+    preflight_dir = repository_path(
+        ROOT, args.preflight_dir, must_exist=True, kind="preflight directory"
+    )
+    preflight_manifest_path = preflight_dir / "preflight_manifest.json"
+    if not preflight_manifest_path.is_file():
+        raise FileNotFoundError("preflight manifest does not exist")
+    preflight = json.loads(preflight_manifest_path.read_text(encoding="utf-8"))
+    labels_path = preflight_dir / "labels.npz"
+    local_reference_path = preflight_dir / "local_reference.npz"
+    inputs_path = preflight_dir / "inputs.npz"
+    for key, path in (
+        ("inputs", inputs_path),
+        ("labels", labels_path),
+        ("local_reference", local_reference_path),
+    ):
+        verify_sha256(path, preflight["artifacts"][key]["sha256"], label=key)
+
+    labels_archive = load_npz_exact(labels_path, ("labels", "original_indices"))
+    reference = load_npz_exact(
+        local_reference_path,
+        (
+            "fp32_predictions",
+            "fp32_logits",
+            "qdq_int8_predictions",
+            "qdq_int8_logits",
+        ),
+    )
+    fp32_remote_path = repository_path(
+        ROOT, args.fp32_remote, must_exist=True, kind="FP32 remote output"
+    )
+    qdq_remote_path = repository_path(
+        ROOT, args.qdq_int8_remote, must_exist=True, kind="QDQ INT8 remote output"
+    )
+    fp32_remote = load_npz_exact(fp32_remote_path, ("output_0",))["output_0"]
+    qdq_remote = load_npz_exact(qdq_remote_path, ("output_0",))["output_0"]
+    local_logits = {
+        "fp32": reference["fp32_logits"],
+        "qdq_int8": reference["qdq_int8_logits"],
+    }
+    for model_id in S22_MODEL_ORDER:
+        expected = np.argmax(local_logits[model_id], axis=1).astype(np.int64)
+        if not np.array_equal(reference[f"{model_id}_predictions"], expected):
+            raise ValueError(f"stored {model_id} local predictions do not match local logits")
+    remote_logits = {"fp32": fp32_remote, "qdq_int8": qdq_remote}
+    jobs = {
+        "fp32": {
+            "compile": experiment["models"]["fp32"]["jobs"]["compile"],
+            "inference": validate_job_id(args.fp32_inference_job_id),
+        },
+        "qdq_int8": {
+            "compile": experiment["models"]["qdq_int8"]["jobs"]["compile"],
+            "inference": validate_job_id(args.qdq_int8_inference_job_id),
+        },
+    }
+    provenance = {
+        "experiment_manifest": {
+            "path": relative_path(ROOT, manifest_path),
+            "sha256": local_sha256_file(manifest_path),
+        },
+        "preflight_manifest": {
+            "path": relative_path(ROOT, preflight_manifest_path),
+            "sha256": local_sha256_file(preflight_manifest_path),
+        },
+        "inputs": {
+            "path": relative_path(ROOT, inputs_path),
+            "sha256": local_sha256_file(inputs_path),
+        },
+        "labels": {
+            "path": relative_path(ROOT, labels_path),
+            "sha256": local_sha256_file(labels_path),
+        },
+        "local_reference": {
+            "path": relative_path(ROOT, local_reference_path),
+            "sha256": local_sha256_file(local_reference_path),
+        },
+        "fp32_remote_output": {
+            "path": relative_path(ROOT, fp32_remote_path),
+            "sha256": local_sha256_file(fp32_remote_path),
+        },
+        "qdq_int8_remote_output": {
+            "path": relative_path(ROOT, qdq_remote_path),
+            "sha256": local_sha256_file(qdq_remote_path),
+        },
+        "models": {
+            model_id: {
+                "path": experiment["models"][model_id]["source_path"],
+                "sha256": experiment["models"][model_id]["source_sha256"],
+            }
+            for model_id in S22_MODEL_ORDER
+        },
+    }
+    report, predictions = build_s22_preflight_report(
+        labels=labels_archive["labels"],
+        original_indices=labels_archive["original_indices"],
+        local_logits=local_logits,
+        remote_logits=remote_logits,
+        provenance=provenance,
+        jobs=jobs,
+        selection=preflight["selection"],
+    )
+    payload, _ = write_s22_accuracy_outputs(
+        _output_dir(args.output_dir), report, predictions
+    )
+    return payload
+
+
+def command_cifar10_full_export(args: argparse.Namespace) -> dict:
+    import numpy as np
+    import onnxruntime as ort
+
+    manifest_path, experiment = _load_manifest_arg(args.manifest)
+    if args.batch_size <= 0:
+        raise ValueError("--batch-size must be positive")
+    data_root = repository_path(ROOT, args.data_root, must_exist=True, kind="data root")
+    test_batch_path = data_root / "cifar-10-batches-py" / "test_batch"
+    full_images, full_labels = load_cifar10_test_set(data_root)
+    inputs, labels, original_indices = prepare_full_test_set(full_images, full_labels)
+    if "CPUExecutionProvider" not in ort.get_available_providers():
+        raise RuntimeError("ONNX Runtime CPUExecutionProvider is unavailable")
+    model_results, reference_arrays = _evaluate_export_models(
+        experiment, inputs, labels, args.batch_size, ort
+    )
+    comparison = prediction_agreement(
+        reference_arrays["fp32_predictions"], reference_arrays["qdq_int8_predictions"]
+    )
+    expected_correct = {"fp32": 9374, "qdq_int8": 9357}
+    for model_id, expected in expected_correct.items():
+        if model_results[model_id]["correct"] != expected:
+            raise RuntimeError(
+                f"{model_id} full-test correct count must reproduce {expected}, got "
+                f"{model_results[model_id]['correct']}"
+            )
+    if comparison["agreement_count"] != 9839:
+        raise RuntimeError(
+            "FP32/QDQ full-test agreement must reproduce 9839/10000, got "
+            f"{comparison['agreement_count']}/10000"
+        )
+    selection = full_selection_manifest(full_images, full_labels)
+    validations = {
+        "original_indices_are_exactly_0_through_9999": bool(
+            np.array_equal(original_indices, np.arange(10000, dtype=np.int64))
+        ),
+        "input_and_label_order_matches_test_batch": bool(np.array_equal(labels, full_labels)),
+        "all_inputs_are_finite": bool(np.all(np.isfinite(inputs))),
+        "all_logits_are_finite": all(
+            bool(np.all(np.isfinite(reference_arrays[f"{model_id}_logits"])))
+            for model_id in PREFLIGHT_MODEL_ORDER
+        ),
+        "fp32_accuracy_reproduces_9374_of_10000": model_results["fp32"]["correct"]
+        == 9374,
+        "qdq_int8_accuracy_reproduces_9357_of_10000": model_results["qdq_int8"][
+            "correct"
+        ]
+        == 9357,
+        "fp32_qdq_agreement_reproduces_9839_of_10000": comparison["agreement_count"]
+        == 9839,
+    }
+    manifest_base = {
+        "schema_version": FULL_EXPORT_SCHEMA,
+        "scope": "offline full CIFAR-10 data export and local ONNX Runtime CPU reference",
+        "statements": {
+            "ai_hub_connected": False,
+            "ai_hub_tasks_created": False,
+            "is_galaxy_s22_qnn_accuracy": False,
+            "piecewise_reference_included": False,
+        },
+        "provenance": {
+            "experiment_manifest_path": relative_path(ROOT, manifest_path),
+            "experiment_manifest_sha256": local_sha256_file(manifest_path),
+            "test_batch_path": relative_path(ROOT, test_batch_path),
+            "test_batch_sha256": local_sha256_file(test_batch_path),
+        },
+        "dataset": {
+            "name": "CIFAR-10",
+            "split": "test",
+            "sample_count": 10000,
+            "ordered_dataset_fingerprint_sha256": ordered_dataset_fingerprint(
+                full_images, full_labels
+            ),
+        },
+        "selection": selection,
+        "preprocessing": preprocessing_metadata(
+            randomness="none; all official test_batch records are retained in original order"
+        ),
+        "runtime": {
+            "numpy": np.__version__,
+            "onnxruntime": ort.__version__,
+            "requested_providers": ["CPUExecutionProvider"],
+            "available_providers": ort.get_available_providers(),
+            "batch_size": args.batch_size,
+        },
+        "models": model_results,
+        "prediction_comparison": comparison,
+        "validations": validations,
+    }
+    report, _ = write_preflight_outputs(
+        _output_dir(args.output_dir),
+        inputs=inputs,
+        labels=labels,
+        original_indices=original_indices,
+        local_reference=reference_arrays,
+        manifest_base=manifest_base,
+        manifest_filename="full_manifest.json",
+        summary_filename="full_summary.md",
+        markdown_renderer=full_export_markdown,
+    )
+    return report
+
+
 COMMANDS = {
     "compile": command_compile,
     "profile": command_profile,
@@ -568,6 +832,8 @@ COMMANDS = {
     "profile-summary": command_profile_summary,
     "cifar10-accuracy": command_cifar10_accuracy,
     "cifar10-preflight": command_cifar10_preflight,
+    "cifar10-s22-report": command_cifar10_s22_report,
+    "cifar10-full-export": command_cifar10_full_export,
 }
 
 
@@ -579,6 +845,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Wrote JSON, Markdown, and predictions NPZ under {Path(args.output_dir).as_posix()}")
         elif args.command == "cifar10-preflight":
             print(f"Wrote preflight NPZ, JSON, and Markdown under {Path(args.output_dir).as_posix()}")
+        elif args.command == "cifar10-s22-report":
+            print(f"Wrote S22 accuracy JSON, Markdown, and predictions under {Path(args.output_dir).as_posix()}")
+        elif args.command == "cifar10-full-export":
+            print(f"Wrote full-test NPZ, JSON, and Markdown under {Path(args.output_dir).as_posix()}")
         else:
             print(f"Wrote JSON and Markdown under {Path(args.output_dir).as_posix()}")
         return 0

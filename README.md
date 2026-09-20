@@ -16,6 +16,8 @@ The same v1.6 CLI also provides a fully offline `cifar10-accuracy` command for r
 
 For later Galaxy S22 inference, `cifar10-preflight` deterministically exports an ignored, class-balanced 1,000-image normalized NPZ plus FP32/QDQ local ORT references. It uses the same verified CIFAR-10 loader and preprocessing as the full local baseline and performs no network operation.
 
+`cifar10-s22-report` converts already-downloaded device outputs into a permanent accuracy/numerical comparison without contacting AI Hub, while `cifar10-full-export` prepares the corresponding complete 10,000-image FP32/QDQ input and local-reference package in the ignored `out/` tree.
+
 A lightweight quantization and deployment benchmark for **ResNet18-SiLU on CIFAR-10**, covering PyTorch FP32 evaluation, ONNX export, ONNX Runtime validation, INT8 post-training quantization, CPU latency benchmarking, quantization matrix evaluation, automatic report generation, and custom **SiLU-aware PTQ** simulation.
 
 This project is designed as a reproducible MVP for AI model quantization, model deployment, and inference performance evaluation.

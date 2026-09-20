@@ -9,10 +9,13 @@ import numpy as np
 
 from silu_benchmark.qnn_local_accuracy import EXPECTED_INPUT, EXPECTED_OUTPUT
 from silu_benchmark.qnn_preflight import (
+    FULL_EXPORT_SCHEMA,
     PREFLIGHT_SCHEMA,
     array_metadata,
     canonical_array_sha256,
     evaluate_preprocessed_session,
+    full_selection_manifest,
+    prepare_full_test_set,
     prepare_preflight_subset,
     select_balanced_original_indices,
     write_deterministic_npz,
@@ -82,6 +85,18 @@ class QnnPreflightTests(unittest.TestCase):
         np.testing.assert_array_equal(selected_labels, labels[indices])
         np.testing.assert_array_equal(np.bincount(selected_labels), np.full(10, 2))
         self.assertTrue(np.all(np.isfinite(inputs)))
+
+    def test_full_test_export_keeps_exact_original_order(self):
+        labels = np.tile(np.arange(10, dtype=np.int64), 1000)
+        images = np.zeros((10000, 3, 32, 32), dtype=np.uint8)
+        inputs, selected_labels, indices = prepare_full_test_set(images, labels)
+        self.assertEqual(inputs.shape, (10000, 3, 32, 32))
+        np.testing.assert_array_equal(selected_labels, labels)
+        np.testing.assert_array_equal(indices, np.arange(10000, dtype=np.int64))
+        selection = full_selection_manifest(images, labels)
+        self.assertEqual(selection["original_indices"], list(range(10000)))
+        self.assertTrue(selection["indices_are_exactly_0_through_9999"])
+        self.assertEqual(FULL_EXPORT_SCHEMA, "qnn-cifar10-s22-full-export/v1.6")
 
     def test_canonical_hash_is_repeatable_and_order_sensitive(self):
         values = np.arange(12, dtype=np.float32).reshape(3, 4)

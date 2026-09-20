@@ -100,6 +100,28 @@ The ignored output directory contains:
 
 The NPZ writer fixes archive metadata and records canonical dtype/shape/content hashes, so repeated exports are byte-stable as well as array-stable. No raw uint8 CIFAR-10 image, credential, or remote output is written. This command does not import the AI Hub SDK, connect to AI Hub, or create a task.
 
+After separately downloading existing device outputs, generate the permanent comparison report entirely offline:
+
+```powershell
+python scripts/run_qnn_aihub.py cifar10-s22-report `
+  --fp32-inference-job-id jp0mdve2g `
+  --qdq-int8-inference-job-id jgolo4e4g `
+  --output-dir results/benchmarks/v1.6_qnn_cifar10_s22_preflight_1000
+```
+
+This reads the local labels/reference plus `fp32_remote/outputs.npz` and `qdq_int8_remote/outputs.npz`; it never contacts AI Hub. The report records accuracy, local/device prediction agreement, logit error, RMSE, cosine similarity, and all disagreements in original `test_batch` indices. Its committed `predictions.npz` contains labels, original indices, and predictions only—no images or logits.
+
+Prepare the complete 10,000-image input package with the same verified loader and preprocessing:
+
+```powershell
+python scripts/run_qnn_aihub.py cifar10-full-export `
+  --data-root data `
+  --batch-size 128 `
+  --output-dir out/qnn/v1.6/cifar10-s22-full-10000
+```
+
+The full export retains original indices `0..9999`, evaluates only FP32 and QDQ INT8, and requires the local reference to reproduce 9374/10000, 9357/10000, and 9839/10000 prediction agreement before publishing its ignored NPZ, JSON, and Markdown outputs.
+
 The confirmed comparison is:
 
 | Model | Mean latency | Inference peak memory | NPU coverage | Comparison with FP32 |

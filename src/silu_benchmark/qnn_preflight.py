@@ -7,7 +7,7 @@ import io
 import json
 import zipfile
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 import numpy as np
 
@@ -22,6 +22,7 @@ from .qnn_local_accuracy import (
 
 
 PREFLIGHT_SCHEMA = "qnn-cifar10-s22-preflight/v1.6"
+FULL_EXPORT_SCHEMA = "qnn-cifar10-s22-full-export/v1.6"
 PREFLIGHT_MODEL_ORDER = ("fp32", "qdq_int8")
 NPZ_FILENAMES = ("inputs.npz", "labels.npz", "local_reference.npz")
 ARRAY_HASH_SCHEMA = b"canonical-ndarray/v1\0"
@@ -115,6 +116,26 @@ def prepare_preflight_subset(
     if not np.all(np.isfinite(inputs)):
         raise ValueError("preflight inputs contain non-finite values")
     return inputs, selected_labels, indices
+
+
+def prepare_full_test_set(
+    images: np.ndarray, labels: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Normalize all 10,000 samples without changing official test_batch order."""
+
+    images = np.asarray(images)
+    labels = np.asarray(labels, dtype=np.int64)
+    if images.shape != (10000, 3, 32, 32) or images.dtype != np.uint8:
+        raise ValueError(f"expected uint8 CIFAR-10 test images, got {images.shape}/{images.dtype}")
+    if labels.shape != (10000,) or np.bincount(labels, minlength=10).tolist() != [1000] * 10:
+        raise ValueError("expected the complete balanced 10,000-label CIFAR-10 test set")
+    original_indices = np.arange(10000, dtype=np.int64)
+    normalized = normalize_cifar_images(images)
+    if normalized.shape != (10000, 3, 32, 32) or normalized.dtype != np.float32:
+        raise RuntimeError(f"unexpected normalized input contract: {normalized.shape}/{normalized.dtype}")
+    if not np.all(np.isfinite(normalized)):
+        raise ValueError("full-test inputs contain non-finite values")
+    return normalized, np.ascontiguousarray(labels), original_indices
 
 
 def evaluate_preprocessed_session(
@@ -243,6 +264,58 @@ def preflight_markdown(manifest: Mapping[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def full_export_markdown(manifest: Mapping[str, Any]) -> str:
+    selection = manifest["selection"]
+    comparison = manifest["prediction_comparison"]
+    lines = [
+        "# Galaxy S22 QNN full CIFAR-10 input export",
+        "",
+        "This stage exports deterministic local inputs and ONNX Runtime CPU references for all 10,000 CIFAR-10 test images. It does not connect to Qualcomm AI Hub, create a remote task, or measure Galaxy S22 QNN accuracy.",
+        "",
+        "## Selection",
+        "",
+        f"- Rule: {selection['rule']}",
+        f"- Samples: {selection['total_samples']} in original `test_batch` order.",
+        "- Original indices: exactly `0..9999`.",
+        "",
+        "## Local ORT reference",
+        "",
+        "| Model | Correct / total | Top-1 |",
+        "|---|---:|---:|",
+    ]
+    for model_id in PREFLIGHT_MODEL_ORDER:
+        row = manifest["models"][model_id]
+        lines.append(
+            f"| {row['label']} | {row['correct']} / {row['total']} | "
+            f"{row['top1_accuracy_percent']:.4f}% |"
+        )
+    lines.extend(
+        [
+            "",
+            f"FP32/QDQ prediction agreement: {comparison['agreement_count']} / "
+            f"{selection['total_samples']} ({comparison['agreement_percent']:.4f}%).",
+            "",
+            "## Generated artifacts",
+            "",
+            "| File | Size (bytes) | SHA256 | Keys |",
+            "|---|---:|---|---|",
+        ]
+    )
+    for artifact in manifest["artifacts"].values():
+        lines.append(
+            f"| `{artifact['path']}` | {artifact['size_bytes']} | `{artifact['sha256']}` | "
+            f"{', '.join(artifact['arrays'])} |"
+        )
+    lines.extend(
+        [
+            "",
+            "`inputs.npz` contains normalized float32 inputs only. No raw uint8 CIFAR-10 image is exported.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def write_preflight_outputs(
     output_dir: Path,
     *,
@@ -251,6 +324,9 @@ def write_preflight_outputs(
     original_indices: np.ndarray,
     local_reference: Mapping[str, np.ndarray],
     manifest_base: Mapping[str, Any],
+    manifest_filename: str = "preflight_manifest.json",
+    summary_filename: str = "preflight_summary.md",
+    markdown_renderer: Callable[[Mapping[str, Any]], str] = preflight_markdown,
 ) -> tuple[dict[str, Any], dict[str, Path]]:
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -268,8 +344,8 @@ def write_preflight_outputs(
         "inputs": output_dir / "inputs.npz",
         "labels": output_dir / "labels.npz",
         "local_reference": output_dir / "local_reference.npz",
-        "manifest": output_dir / "preflight_manifest.json",
-        "summary": output_dir / "preflight_summary.md",
+        "manifest": output_dir / manifest_filename,
+        "summary": output_dir / summary_filename,
     }
     for key in ("inputs", "labels", "local_reference"):
         write_deterministic_npz(paths[key], archives[key])
@@ -302,7 +378,7 @@ def write_preflight_outputs(
     paths["manifest"].write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
-    paths["summary"].write_text(preflight_markdown(manifest), encoding="utf-8")
+    paths["summary"].write_text(markdown_renderer(manifest), encoding="utf-8")
     return manifest, paths
 
 
@@ -333,4 +409,23 @@ def selection_manifest(
         "selected_raw_dataset_fingerprint_sha256": ordered_dataset_fingerprint(
             np.asarray(full_images)[original_indices], selected_labels
         ),
+    }
+
+
+def full_selection_manifest(images: np.ndarray, labels: np.ndarray) -> dict[str, Any]:
+    images = np.asarray(images)
+    labels = np.asarray(labels, dtype=np.int64)
+    expected_indices = np.arange(10000, dtype=np.int64)
+    counts = np.bincount(labels, minlength=10)
+    if images.shape != (10000, 3, 32, 32) or labels.shape != (10000,):
+        raise ValueError("full selection manifest requires the complete CIFAR-10 test set")
+    return {
+        "rule": "use every official test_batch record exactly once in original order",
+        "total_samples": 10000,
+        "class_counts": {str(label): int(count) for label, count in enumerate(counts)},
+        "original_indices": expected_indices.tolist(),
+        "indices_are_unique": True,
+        "indices_are_exactly_0_through_9999": True,
+        "labels_match_original_order": True,
+        "full_dataset_fingerprint_sha256": ordered_dataset_fingerprint(images, labels),
     }

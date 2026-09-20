@@ -281,6 +281,8 @@ class QnnAiHubBackendTests(unittest.TestCase):
             "profile-summary",
             "cifar10-accuracy",
             "cifar10-preflight",
+            "cifar10-s22-report",
+            "cifar10-full-export",
         ):
             args = runner.parse_args([command, "--job-id", "jtest"] if command in {"profile", "inference"} else [command])
             self.assertEqual(args.command, command)
