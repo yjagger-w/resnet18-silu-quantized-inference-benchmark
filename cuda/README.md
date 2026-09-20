@@ -4,11 +4,10 @@ This directory contains the CUDA portion of the ResNet18-SiLU inference
 benchmark. It is intentionally independent from the existing `cpp/` project
 so the CPU and CUDA baselines can be configured and tested separately.
 
-The first milestone establishes a minimal vector-add kernel and checked host
-launch interface. The second adds a shared-memory sum-reduction baseline. The
-third adds a hierarchical multi-pass reduction with reusable caller-provided
-workspace. The fourth adds a CUDA Event benchmark for reproducible comparison
-of the two reduction implementations.
+The milestones establish a vector-add scaffold, atomic and hierarchical
+reductions, reproducible CUDA Event benchmarking, and a fused FP32 NCHW
+Bias+SiLU correctness baseline. Performance claims are made only from recorded
+GPU benchmark artifacts, not from CTest process duration.
 
 ## Requirements
 
@@ -43,10 +42,10 @@ ctest \
 ```
 
 When the CUDA Toolkit is installed but no GPU is attached, configuration and
-compilation remain valid. Each runtime correctness test performs its host-side
-contract checks and reports a CTest skip using exit code 77. The benchmark CLI
-contract tests do not require a GPU. With a T4 attached, the correctness tests
-execute their kernels and compare device results with CPU references.
+compilation remain valid. Runtime correctness tests perform host-side contract
+checks and report a CTest skip using exit code 77. Benchmark CLI contract tests
+do not require a GPU. With a T4 attached, device tests compare kernel results
+with CPU references.
 
 ## Reduction implementations
 
@@ -90,5 +89,21 @@ mean elapsed time; it is not a claim about total DRAM traffic.
 Use `--implementation atomic` or `--implementation hierarchical` for an
 isolated run. Use `--help` to inspect the complete CLI.
 
-Vectorized loads, FP16, fused Bias+SiLU kernels, Nsight Compute profiling, and
-end-to-end ResNet integration belong to later milestones.
+## Fused Bias+SiLU baseline
+
+`launch_bias_silu_nchw` computes the following FP32 operation in one kernel:
+
+```text
+output[n, c, h, w] =
+    silu(input[n, c, h, w] + bias[c])
+```
+
+The interface accepts flattened contiguous NCHW storage, a channel bias vector,
+batch size, channel count, and flattened spatial size. It supports in-place
+execution when `output == input`. Its correctness test covers scalar and
+multi-channel shapes, negative and positive activation ranges, channel
+broadcasting, shape-overflow rejection, non-finite output detection, and
+in-place execution.
+
+Vectorized loads, FP16, Bias+SiLU CUDA Event benchmarks, Nsight Compute
+profiling, and end-to-end ResNet integration belong to later milestones.
