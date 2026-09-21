@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "benchmark": "CUDA Bias-SiLU repeated interleaved benchmark",
+  "device": "Tesla T4",
+  "compute_capability": "7.5",
+  "benchmark_implementation_commit": "bc5c2d76f7e277dcc256ef218846a8f41b1a7c68",
+  "aggregation_tool_commit": "efc9b6460cc3d6d8b5447941fd6ecadc57d76db9",
+  "aggregate_json_sha256": "05621BE9B3C606EAAFC24300C8672EBF9A376EDF1A66EE14F09EA8E7F0A2F14E",
+  "aggregate_markdown_sha256": "5D57D7828F894B5D43929FB6BF9B38F8302633D08554FD24E2B4159DF39C9B91"
+}

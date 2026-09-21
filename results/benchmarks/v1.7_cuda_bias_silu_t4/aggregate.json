@@ -1,0 +1,1639 @@
+{
+  "schema_version": 1,
+  "kind": "cuda_bias_silu_repeated_benchmark_aggregate",
+  "source_runs": [
+    {
+      "filename": "run_1.json",
+      "size_bytes": 14919,
+      "sha256": "CE76BFF3C26251E8DA6954A921195FC7A6F210323688AEEC6DE5AEA79D80C145"
+    },
+    {
+      "filename": "run_2.json",
+      "size_bytes": 14919,
+      "sha256": "F0AC4CD40D0FC36C0519B00D9F5FE5F9135C1B00665B97F92714993EAB3015C5"
+    },
+    {
+      "filename": "run_3.json",
+      "size_bytes": 14919,
+      "sha256": "4EB71FB15955B8D3AB86C7AFF35DDFE585E0E57AFF2F5C8F32E8316A997873D6"
+    },
+    {
+      "filename": "run_4.json",
+      "size_bytes": 14921,
+      "sha256": "DB9D00BB137742EE717621B343D71B43AEA3E53842417BE85FC0E093D623E103"
+    },
+    {
+      "filename": "run_5.json",
+      "size_bytes": 14920,
+      "sha256": "7B41150B3EB8D45A91EB0FA77E7E593C12B9BD7A52F986545F72AC67F48827D4"
+    }
+  ],
+  "device": {
+    "name": "Tesla T4",
+    "compute_capability": "7.5",
+    "multiprocessor_count": 40,
+    "total_global_memory_bytes": 16709648384,
+    "driver_version": "12.4",
+    "runtime_version": "12.4"
+  },
+  "build": {
+    "cuda_compiler_version": "12.4.131",
+    "host_compiler": "GNU 11.4.0"
+  },
+  "protocol": {
+    "shape_set": "CIFAR-10 ResNet18 stage outputs",
+    "warmup_iterations": 50,
+    "measured_iterations": 1000,
+    "iteration_scope": "per implementation",
+    "execution_order": "interleaved round-robin with per-round rotation",
+    "timer": "CUDA events on the default stream",
+    "excluded": "allocation, host transfers, and in-place device reset copies",
+    "effective_bandwidth_definition": "input plus output tensor bytes divided by mean elapsed time; bias traffic excluded"
+  },
+  "aggregation": {
+    "run_count": 5,
+    "method": "median of each per-run summary metric",
+    "p50_range": "minimum and maximum per-run P50",
+    "max_abs_error_limit": 2e-06
+  },
+  "results": [
+    {
+      "shape": {
+        "name": "stem_64x32x32",
+        "batch": 1,
+        "channels": 64,
+        "height": 32,
+        "width": 32,
+        "elements": 65536
+      },
+      "mode": "out-of-place",
+      "implementation": "scalar",
+      "selected_kernel_path": "scalar",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.0063,
+          "min": 0.005885,
+          "max": 0.00873
+        },
+        "p50_ms": {
+          "median": 0.006016,
+          "min": 0.005888,
+          "max": 0.008192
+        },
+        "p90_ms": {
+          "median": 0.006144,
+          "min": 0.006144,
+          "max": 0.009568
+        },
+        "p95_ms": {
+          "median": 0.006336,
+          "min": 0.006208,
+          "max": 0.009888
+        },
+        "p99_ms": {
+          "median": 0.007873,
+          "min": 0.007808,
+          "max": 0.010272
+        },
+        "min_ms": {
+          "median": 0.004512,
+          "min": 0.004384,
+          "max": 0.00672
+        },
+        "max_ms": {
+          "median": 0.174016,
+          "min": 0.106496,
+          "max": 0.188416
+        },
+        "effective_tensor_gbps": {
+          "median": 83.213977,
+          "min": 60.053368,
+          "max": 89.095773
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stem_64x32x32",
+        "batch": 1,
+        "channels": 64,
+        "height": 32,
+        "width": 32,
+        "elements": 65536
+      },
+      "mode": "out-of-place",
+      "implementation": "float4",
+      "selected_kernel_path": "float4",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.005546,
+          "min": 0.005368,
+          "max": 0.007746
+        },
+        "p50_ms": {
+          "median": 0.00544,
+          "min": 0.005376,
+          "max": 0.007776
+        },
+        "p90_ms": {
+          "median": 0.006144,
+          "min": 0.006144,
+          "max": 0.008192
+        },
+        "p95_ms": {
+          "median": 0.006144,
+          "min": 0.006144,
+          "max": 0.008256
+        },
+        "p99_ms": {
+          "median": 0.008192,
+          "min": 0.007649,
+          "max": 0.009568
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.006144
+        },
+        "max_ms": {
+          "median": 0.03456,
+          "min": 0.014336,
+          "max": 0.15152
+        },
+        "effective_tensor_gbps": {
+          "median": 94.542349,
+          "min": 67.683741,
+          "max": 97.667403
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stem_64x32x32",
+        "batch": 1,
+        "channels": 64,
+        "height": 32,
+        "width": 32,
+        "elements": 65536
+      },
+      "mode": "out-of-place",
+      "implementation": "auto",
+      "selected_kernel_path": "float4",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.005663,
+          "min": 0.005368,
+          "max": 0.007659
+        },
+        "p50_ms": {
+          "median": 0.005472,
+          "min": 0.005344,
+          "max": 0.007712
+        },
+        "p90_ms": {
+          "median": 0.006144,
+          "min": 0.006144,
+          "max": 0.008192
+        },
+        "p95_ms": {
+          "median": 0.006144,
+          "min": 0.006144,
+          "max": 0.008224
+        },
+        "p99_ms": {
+          "median": 0.008097,
+          "min": 0.006883,
+          "max": 0.00928
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.006144
+        },
+        "max_ms": {
+          "median": 0.095744,
+          "min": 0.013728,
+          "max": 0.198048
+        },
+        "effective_tensor_gbps": {
+          "median": 92.576478,
+          "min": 68.452916,
+          "max": 97.672644
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stem_64x32x32",
+        "batch": 1,
+        "channels": 64,
+        "height": 32,
+        "width": 32,
+        "elements": 65536
+      },
+      "mode": "in-place",
+      "implementation": "scalar",
+      "selected_kernel_path": "scalar",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.005582,
+          "min": 0.005507,
+          "max": 0.007912
+        },
+        "p50_ms": {
+          "median": 0.005632,
+          "min": 0.005504,
+          "max": 0.008
+        },
+        "p90_ms": {
+          "median": 0.006144,
+          "min": 0.006144,
+          "max": 0.008192
+        },
+        "p95_ms": {
+          "median": 0.006144,
+          "min": 0.006144,
+          "max": 0.008224
+        },
+        "p99_ms": {
+          "median": 0.007297,
+          "min": 0.007171,
+          "max": 0.008225
+        },
+        "min_ms": {
+          "median": 0.004384,
+          "min": 0.004288,
+          "max": 0.006816
+        },
+        "max_ms": {
+          "median": 0.027552,
+          "min": 0.011872,
+          "max": 0.115008
+        },
+        "effective_tensor_gbps": {
+          "median": 93.928257,
+          "min": 66.267594,
+          "max": 95.198805
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stem_64x32x32",
+        "batch": 1,
+        "channels": 64,
+        "height": 32,
+        "width": 32,
+        "elements": 65536
+      },
+      "mode": "in-place",
+      "implementation": "float4",
+      "selected_kernel_path": "float4",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.005272,
+          "min": 0.004951,
+          "max": 0.007175
+        },
+        "p50_ms": {
+          "median": 0.005024,
+          "min": 0.004864,
+          "max": 0.00704
+        },
+        "p90_ms": {
+          "median": 0.005888,
+          "min": 0.00576,
+          "max": 0.007872
+        },
+        "p95_ms": {
+          "median": 0.006048,
+          "min": 0.005888,
+          "max": 0.008
+        },
+        "p99_ms": {
+          "median": 0.006689,
+          "min": 0.006338,
+          "max": 0.008224
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.006144
+        },
+        "max_ms": {
+          "median": 0.106464,
+          "min": 0.009952,
+          "max": 0.237216
+        },
+        "effective_tensor_gbps": {
+          "median": 99.441612,
+          "min": 73.070765,
+          "max": 105.884938
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stem_64x32x32",
+        "batch": 1,
+        "channels": 64,
+        "height": 32,
+        "width": 32,
+        "elements": 65536
+      },
+      "mode": "in-place",
+      "implementation": "auto",
+      "selected_kernel_path": "float4",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.005331,
+          "min": 0.004974,
+          "max": 0.007155
+        },
+        "p50_ms": {
+          "median": 0.005008,
+          "min": 0.004864,
+          "max": 0.00704
+        },
+        "p90_ms": {
+          "median": 0.005888,
+          "min": 0.00576,
+          "max": 0.007872
+        },
+        "p95_ms": {
+          "median": 0.006016,
+          "min": 0.005888,
+          "max": 0.008
+        },
+        "p99_ms": {
+          "median": 0.006561,
+          "min": 0.006144,
+          "max": 0.008192
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.006144
+        },
+        "max_ms": {
+          "median": 0.114368,
+          "min": 0.01024,
+          "max": 0.213312
+        },
+        "effective_tensor_gbps": {
+          "median": 98.346879,
+          "min": 73.277963,
+          "max": 105.406049
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage2_128x16x16",
+        "batch": 1,
+        "channels": 128,
+        "height": 16,
+        "width": 16,
+        "elements": 32768
+      },
+      "mode": "out-of-place",
+      "implementation": "scalar",
+      "selected_kernel_path": "scalar",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.005292,
+          "min": 0.004864,
+          "max": 0.006828
+        },
+        "p50_ms": {
+          "median": 0.004896,
+          "min": 0.004704,
+          "max": 0.00656
+        },
+        "p90_ms": {
+          "median": 0.005856,
+          "min": 0.005696,
+          "max": 0.00752
+        },
+        "p95_ms": {
+          "median": 0.006048,
+          "min": 0.005856,
+          "max": 0.00768
+        },
+        "p99_ms": {
+          "median": 0.008004,
+          "min": 0.006144,
+          "max": 0.008196
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.006112
+        },
+        "max_ms": {
+          "median": 0.097152,
+          "min": 0.01024,
+          "max": 0.182272
+        },
+        "effective_tensor_gbps": {
+          "median": 49.537401,
+          "min": 38.393761,
+          "max": 53.89651
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage2_128x16x16",
+        "batch": 1,
+        "channels": 128,
+        "height": 16,
+        "width": 16,
+        "elements": 32768
+      },
+      "mode": "out-of-place",
+      "implementation": "float4",
+      "selected_kernel_path": "float4",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.005356,
+          "min": 0.005046,
+          "max": 0.006796
+        },
+        "p50_ms": {
+          "median": 0.00496,
+          "min": 0.004768,
+          "max": 0.006592
+        },
+        "p90_ms": {
+          "median": 0.005888,
+          "min": 0.00576,
+          "max": 0.007587
+        },
+        "p95_ms": {
+          "median": 0.006082,
+          "min": 0.005984,
+          "max": 0.007746
+        },
+        "p99_ms": {
+          "median": 0.007624,
+          "min": 0.006145,
+          "max": 0.008386
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.006112
+        },
+        "max_ms": {
+          "median": 0.116736,
+          "min": 0.012448,
+          "max": 0.211328
+        },
+        "effective_tensor_gbps": {
+          "median": 48.941941,
+          "min": 38.574005,
+          "max": 51.953323
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage2_128x16x16",
+        "batch": 1,
+        "channels": 128,
+        "height": 16,
+        "width": 16,
+        "elements": 32768
+      },
+      "mode": "out-of-place",
+      "implementation": "auto",
+      "selected_kernel_path": "scalar_threshold_fallback",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.005092,
+          "min": 0.004897,
+          "max": 0.007112
+        },
+        "p50_ms": {
+          "median": 0.004928,
+          "min": 0.004736,
+          "max": 0.00656
+        },
+        "p90_ms": {
+          "median": 0.005824,
+          "min": 0.005728,
+          "max": 0.00752
+        },
+        "p95_ms": {
+          "median": 0.006048,
+          "min": 0.005954,
+          "max": 0.007682
+        },
+        "p99_ms": {
+          "median": 0.006432,
+          "min": 0.006146,
+          "max": 0.009346
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.006112
+        },
+        "max_ms": {
+          "median": 0.088192,
+          "min": 0.011296,
+          "max": 0.15632
+        },
+        "effective_tensor_gbps": {
+          "median": 51.481863,
+          "min": 36.861217,
+          "max": 53.533037
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage2_128x16x16",
+        "batch": 1,
+        "channels": 128,
+        "height": 16,
+        "width": 16,
+        "elements": 32768
+      },
+      "mode": "in-place",
+      "implementation": "scalar",
+      "selected_kernel_path": "scalar",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.005106,
+          "min": 0.00499,
+          "max": 0.005978
+        },
+        "p50_ms": {
+          "median": 0.004768,
+          "min": 0.004576,
+          "max": 0.006144
+        },
+        "p90_ms": {
+          "median": 0.005696,
+          "min": 0.005568,
+          "max": 0.007232
+        },
+        "p95_ms": {
+          "median": 0.005856,
+          "min": 0.005792,
+          "max": 0.007424
+        },
+        "p99_ms": {
+          "median": 0.007173,
+          "min": 0.006144,
+          "max": 0.008192
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.004096
+        },
+        "max_ms": {
+          "median": 0.096096,
+          "min": 0.010336,
+          "max": 0.215168
+        },
+        "effective_tensor_gbps": {
+          "median": 51.343441,
+          "min": 43.852981,
+          "max": 52.53909
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage2_128x16x16",
+        "batch": 1,
+        "channels": 128,
+        "height": 16,
+        "width": 16,
+        "elements": 32768
+      },
+      "mode": "in-place",
+      "implementation": "float4",
+      "selected_kernel_path": "float4",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.005018,
+          "min": 0.004829,
+          "max": 0.006099
+        },
+        "p50_ms": {
+          "median": 0.004768,
+          "min": 0.004608,
+          "max": 0.006144
+        },
+        "p90_ms": {
+          "median": 0.005728,
+          "min": 0.005568,
+          "max": 0.0072
+        },
+        "p95_ms": {
+          "median": 0.005856,
+          "min": 0.005728,
+          "max": 0.007424
+        },
+        "p99_ms": {
+          "median": 0.007489,
+          "min": 0.006179,
+          "max": 0.008192
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.004096
+        },
+        "max_ms": {
+          "median": 0.12896,
+          "min": 0.036192,
+          "max": 0.151936
+        },
+        "effective_tensor_gbps": {
+          "median": 52.2409,
+          "min": 42.984799,
+          "max": 54.289047
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage2_128x16x16",
+        "batch": 1,
+        "channels": 128,
+        "height": 16,
+        "width": 16,
+        "elements": 32768
+      },
+      "mode": "in-place",
+      "implementation": "auto",
+      "selected_kernel_path": "scalar_threshold_fallback",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.005196,
+          "min": 0.004868,
+          "max": 0.006157
+        },
+        "p50_ms": {
+          "median": 0.004768,
+          "min": 0.004608,
+          "max": 0.006144
+        },
+        "p90_ms": {
+          "median": 0.005696,
+          "min": 0.0056,
+          "max": 0.007171
+        },
+        "p95_ms": {
+          "median": 0.005858,
+          "min": 0.00576,
+          "max": 0.007392
+        },
+        "p99_ms": {
+          "median": 0.006664,
+          "min": 0.006369,
+          "max": 0.008192
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.004096
+        },
+        "max_ms": {
+          "median": 0.121376,
+          "min": 0.075776,
+          "max": 0.193632
+        },
+        "effective_tensor_gbps": {
+          "median": 50.450495,
+          "min": 42.577962,
+          "max": 53.855054
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage3_256x8x8",
+        "batch": 1,
+        "channels": 256,
+        "height": 8,
+        "width": 8,
+        "elements": 16384
+      },
+      "mode": "out-of-place",
+      "implementation": "scalar",
+      "selected_kernel_path": "scalar",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.004822,
+          "min": 0.004695,
+          "max": 0.005689
+        },
+        "p50_ms": {
+          "median": 0.00464,
+          "min": 0.004544,
+          "max": 0.005248
+        },
+        "p90_ms": {
+          "median": 0.005632,
+          "min": 0.005536,
+          "max": 0.006048
+        },
+        "p95_ms": {
+          "median": 0.005824,
+          "min": 0.005664,
+          "max": 0.006144
+        },
+        "p99_ms": {
+          "median": 0.00624,
+          "min": 0.006144,
+          "max": 0.00797
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.004096
+        },
+        "max_ms": {
+          "median": 0.012064,
+          "min": 0.01024,
+          "max": 0.221792
+        },
+        "effective_tensor_gbps": {
+          "median": 27.184698,
+          "min": 23.04036,
+          "max": 27.915028
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage3_256x8x8",
+        "batch": 1,
+        "channels": 256,
+        "height": 8,
+        "width": 8,
+        "elements": 16384
+      },
+      "mode": "out-of-place",
+      "implementation": "float4",
+      "selected_kernel_path": "float4",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.005423,
+          "min": 0.004892,
+          "max": 0.005466
+        },
+        "p50_ms": {
+          "median": 0.00496,
+          "min": 0.004736,
+          "max": 0.00544
+        },
+        "p90_ms": {
+          "median": 0.005795,
+          "min": 0.005699,
+          "max": 0.006144
+        },
+        "p95_ms": {
+          "median": 0.005984,
+          "min": 0.005888,
+          "max": 0.006144
+        },
+        "p99_ms": {
+          "median": 0.006922,
+          "min": 0.006144,
+          "max": 0.00778
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.004096
+        },
+        "max_ms": {
+          "median": 0.012288,
+          "min": 0.01056,
+          "max": 0.241312
+        },
+        "effective_tensor_gbps": {
+          "median": 24.17004,
+          "min": 23.978317,
+          "max": 26.794884
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage3_256x8x8",
+        "batch": 1,
+        "channels": 256,
+        "height": 8,
+        "width": 8,
+        "elements": 16384
+      },
+      "mode": "out-of-place",
+      "implementation": "auto",
+      "selected_kernel_path": "scalar_threshold_fallback",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.005009,
+          "min": 0.004889,
+          "max": 0.00552
+        },
+        "p50_ms": {
+          "median": 0.004672,
+          "min": 0.004544,
+          "max": 0.005312
+        },
+        "p90_ms": {
+          "median": 0.005664,
+          "min": 0.005568,
+          "max": 0.00608
+        },
+        "p95_ms": {
+          "median": 0.005856,
+          "min": 0.005728,
+          "max": 0.006144
+        },
+        "p99_ms": {
+          "median": 0.006401,
+          "min": 0.006209,
+          "max": 0.007172
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.004096
+        },
+        "max_ms": {
+          "median": 0.157664,
+          "min": 0.10928,
+          "max": 0.194624
+        },
+        "effective_tensor_gbps": {
+          "median": 26.168344,
+          "min": 23.746304,
+          "max": 26.812249
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage3_256x8x8",
+        "batch": 1,
+        "channels": 256,
+        "height": 8,
+        "width": 8,
+        "elements": 16384
+      },
+      "mode": "in-place",
+      "implementation": "scalar",
+      "selected_kernel_path": "scalar",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.005056,
+          "min": 0.004792,
+          "max": 0.005088
+        },
+        "p50_ms": {
+          "median": 0.004544,
+          "min": 0.004416,
+          "max": 0.004864
+        },
+        "p90_ms": {
+          "median": 0.005536,
+          "min": 0.005408,
+          "max": 0.005856
+        },
+        "p95_ms": {
+          "median": 0.005792,
+          "min": 0.005568,
+          "max": 0.006144
+        },
+        "p99_ms": {
+          "median": 0.007619,
+          "min": 0.006144,
+          "max": 0.008192
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.004096
+        },
+        "max_ms": {
+          "median": 0.12288,
+          "min": 0.018496,
+          "max": 0.196608
+        },
+        "effective_tensor_gbps": {
+          "median": 25.923394,
+          "min": 25.759548,
+          "max": 27.353167
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage3_256x8x8",
+        "batch": 1,
+        "channels": 256,
+        "height": 8,
+        "width": 8,
+        "elements": 16384
+      },
+      "mode": "in-place",
+      "implementation": "float4",
+      "selected_kernel_path": "float4",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.00492,
+          "min": 0.004791,
+          "max": 0.005326
+        },
+        "p50_ms": {
+          "median": 0.004704,
+          "min": 0.00464,
+          "max": 0.005216
+        },
+        "p90_ms": {
+          "median": 0.005667,
+          "min": 0.0056,
+          "max": 0.006048
+        },
+        "p95_ms": {
+          "median": 0.00592,
+          "min": 0.005728,
+          "max": 0.006144
+        },
+        "p99_ms": {
+          "median": 0.006816,
+          "min": 0.006144,
+          "max": 0.007841
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.004096
+        },
+        "max_ms": {
+          "median": 0.071232,
+          "min": 0.011712,
+          "max": 0.123712
+        },
+        "effective_tensor_gbps": {
+          "median": 26.639264,
+          "min": 24.611835,
+          "max": 27.35609
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage3_256x8x8",
+        "batch": 1,
+        "channels": 256,
+        "height": 8,
+        "width": 8,
+        "elements": 16384
+      },
+      "mode": "in-place",
+      "implementation": "auto",
+      "selected_kernel_path": "scalar_threshold_fallback",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.004959,
+          "min": 0.004722,
+          "max": 0.005185
+        },
+        "p50_ms": {
+          "median": 0.004544,
+          "min": 0.004448,
+          "max": 0.004896
+        },
+        "p90_ms": {
+          "median": 0.005568,
+          "min": 0.00544,
+          "max": 0.005888
+        },
+        "p95_ms": {
+          "median": 0.005762,
+          "min": 0.005602,
+          "max": 0.006144
+        },
+        "p99_ms": {
+          "median": 0.00656,
+          "min": 0.006145,
+          "max": 0.008515
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.004096
+        },
+        "max_ms": {
+          "median": 0.11376,
+          "min": 0.011008,
+          "max": 0.232736
+        },
+        "effective_tensor_gbps": {
+          "median": 26.429728,
+          "min": 25.28083,
+          "max": 27.755755
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage4_512x4x4",
+        "batch": 1,
+        "channels": 512,
+        "height": 4,
+        "width": 4,
+        "elements": 8192
+      },
+      "mode": "out-of-place",
+      "implementation": "scalar",
+      "selected_kernel_path": "scalar",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.004918,
+          "min": 0.004656,
+          "max": 0.005164
+        },
+        "p50_ms": {
+          "median": 0.004512,
+          "min": 0.00448,
+          "max": 0.004864
+        },
+        "p90_ms": {
+          "median": 0.005568,
+          "min": 0.005472,
+          "max": 0.005856
+        },
+        "p95_ms": {
+          "median": 0.005794,
+          "min": 0.005696,
+          "max": 0.00608
+        },
+        "p99_ms": {
+          "median": 0.006472,
+          "min": 0.006145,
+          "max": 0.008197
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.004096
+        },
+        "max_ms": {
+          "median": 0.012288,
+          "min": 0.010688,
+          "max": 0.206752
+        },
+        "effective_tensor_gbps": {
+          "median": 13.325525,
+          "min": 12.691016,
+          "max": 14.074441
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage4_512x4x4",
+        "batch": 1,
+        "channels": 512,
+        "height": 4,
+        "width": 4,
+        "elements": 8192
+      },
+      "mode": "out-of-place",
+      "implementation": "float4",
+      "selected_kernel_path": "float4",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.005128,
+          "min": 0.005099,
+          "max": 0.005406
+        },
+        "p50_ms": {
+          "median": 0.004864,
+          "min": 0.004736,
+          "max": 0.00528
+        },
+        "p90_ms": {
+          "median": 0.005827,
+          "min": 0.005696,
+          "max": 0.006112
+        },
+        "p95_ms": {
+          "median": 0.006144,
+          "min": 0.005888,
+          "max": 0.006144
+        },
+        "p99_ms": {
+          "median": 0.006916,
+          "min": 0.006625,
+          "max": 0.007429
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.004096
+        },
+        "max_ms": {
+          "median": 0.126976,
+          "min": 0.012288,
+          "max": 0.165888
+        },
+        "effective_tensor_gbps": {
+          "median": 12.780669,
+          "min": 12.123221,
+          "max": 12.852051
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage4_512x4x4",
+        "batch": 1,
+        "channels": 512,
+        "height": 4,
+        "width": 4,
+        "elements": 8192
+      },
+      "mode": "out-of-place",
+      "implementation": "auto",
+      "selected_kernel_path": "scalar_threshold_fallback",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.004777,
+          "min": 0.00469,
+          "max": 0.004977
+        },
+        "p50_ms": {
+          "median": 0.004512,
+          "min": 0.00448,
+          "max": 0.004864
+        },
+        "p90_ms": {
+          "median": 0.0056,
+          "min": 0.005504,
+          "max": 0.005824
+        },
+        "p95_ms": {
+          "median": 0.00592,
+          "min": 0.005728,
+          "max": 0.005984
+        },
+        "p99_ms": {
+          "median": 0.006528,
+          "min": 0.006144,
+          "max": 0.007973
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.004096
+        },
+        "max_ms": {
+          "median": 0.011264,
+          "min": 0.010528,
+          "max": 0.012384
+        },
+        "effective_tensor_gbps": {
+          "median": 13.71845,
+          "min": 13.168894,
+          "max": 13.972941
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage4_512x4x4",
+        "batch": 1,
+        "channels": 512,
+        "height": 4,
+        "width": 4,
+        "elements": 8192
+      },
+      "mode": "in-place",
+      "implementation": "scalar",
+      "selected_kernel_path": "scalar",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.004816,
+          "min": 0.004724,
+          "max": 0.005265
+        },
+        "p50_ms": {
+          "median": 0.00448,
+          "min": 0.004352,
+          "max": 0.00448
+        },
+        "p90_ms": {
+          "median": 0.005568,
+          "min": 0.005379,
+          "max": 0.0056
+        },
+        "p95_ms": {
+          "median": 0.005824,
+          "min": 0.005568,
+          "max": 0.006018
+        },
+        "p99_ms": {
+          "median": 0.006915,
+          "min": 0.006112,
+          "max": 0.008257
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.004096
+        },
+        "max_ms": {
+          "median": 0.14336,
+          "min": 0.014336,
+          "max": 0.179392
+        },
+        "effective_tensor_gbps": {
+          "median": 13.607973,
+          "min": 12.448335,
+          "max": 13.874305
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage4_512x4x4",
+        "batch": 1,
+        "channels": 512,
+        "height": 4,
+        "width": 4,
+        "elements": 8192
+      },
+      "mode": "in-place",
+      "implementation": "float4",
+      "selected_kernel_path": "float4",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.005206,
+          "min": 0.004897,
+          "max": 0.005386
+        },
+        "p50_ms": {
+          "median": 0.004736,
+          "min": 0.004608,
+          "max": 0.0048
+        },
+        "p90_ms": {
+          "median": 0.005728,
+          "min": 0.0056,
+          "max": 0.005792
+        },
+        "p95_ms": {
+          "median": 0.005952,
+          "min": 0.005856,
+          "max": 0.006144
+        },
+        "p99_ms": {
+          "median": 0.007233,
+          "min": 0.006561,
+          "max": 0.009666
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.004096
+        },
+        "max_ms": {
+          "median": 0.139264,
+          "min": 0.012512,
+          "max": 0.234944
+        },
+        "effective_tensor_gbps": {
+          "median": 12.589751,
+          "min": 12.168746,
+          "max": 13.383172
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    },
+    {
+      "shape": {
+        "name": "stage4_512x4x4",
+        "batch": 1,
+        "channels": 512,
+        "height": 4,
+        "width": 4,
+        "elements": 8192
+      },
+      "mode": "in-place",
+      "implementation": "auto",
+      "selected_kernel_path": "scalar_threshold_fallback",
+      "run_count": 5,
+      "metrics": {
+        "mean_ms": {
+          "median": 0.004892,
+          "min": 0.004686,
+          "max": 0.005043
+        },
+        "p50_ms": {
+          "median": 0.004448,
+          "min": 0.004352,
+          "max": 0.00448
+        },
+        "p90_ms": {
+          "median": 0.005504,
+          "min": 0.005472,
+          "max": 0.005664
+        },
+        "p95_ms": {
+          "median": 0.005858,
+          "min": 0.005634,
+          "max": 0.006016
+        },
+        "p99_ms": {
+          "median": 0.007426,
+          "min": 0.006144,
+          "max": 0.007907
+        },
+        "min_ms": {
+          "median": 0.004096,
+          "min": 0.004096,
+          "max": 0.004096
+        },
+        "max_ms": {
+          "median": 0.16416,
+          "min": 0.011744,
+          "max": 0.211264
+        },
+        "effective_tensor_gbps": {
+          "median": 13.396128,
+          "min": 12.994677,
+          "max": 13.98611
+        }
+      },
+      "max_abs_error": {
+        "maximum": 1e-06
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "shape": {
+        "name": "stem_64x32x32",
+        "batch": 1,
+        "channels": 64,
+        "height": 32,
+        "width": 32,
+        "elements": 65536
+      },
+      "mode": "out-of-place",
+      "scalar_median_p50_ms": 0.006016,
+      "float4_median_p50_ms": 0.00544,
+      "auto_median_p50_ms": 0.005472,
+      "auto_selected_kernel_path": "float4",
+      "best_explicit_implementation": "float4",
+      "float4_speedup_vs_scalar_p50": 1.1058823529411763,
+      "auto_speedup_vs_scalar_p50": 1.0994152046783625,
+      "auto_speedup_vs_best_explicit_p50": 0.9941520467836258,
+      "maximum_abs_error": 1e-06
+    },
+    {
+      "shape": {
+        "name": "stem_64x32x32",
+        "batch": 1,
+        "channels": 64,
+        "height": 32,
+        "width": 32,
+        "elements": 65536
+      },
+      "mode": "in-place",
+      "scalar_median_p50_ms": 0.005632,
+      "float4_median_p50_ms": 0.005024,
+      "auto_median_p50_ms": 0.005008,
+      "auto_selected_kernel_path": "float4",
+      "best_explicit_implementation": "float4",
+      "float4_speedup_vs_scalar_p50": 1.1210191082802548,
+      "auto_speedup_vs_scalar_p50": 1.1246006389776357,
+      "auto_speedup_vs_best_explicit_p50": 1.0031948881789137,
+      "maximum_abs_error": 1e-06
+    },
+    {
+      "shape": {
+        "name": "stage2_128x16x16",
+        "batch": 1,
+        "channels": 128,
+        "height": 16,
+        "width": 16,
+        "elements": 32768
+      },
+      "mode": "out-of-place",
+      "scalar_median_p50_ms": 0.004896,
+      "float4_median_p50_ms": 0.00496,
+      "auto_median_p50_ms": 0.004928,
+      "auto_selected_kernel_path": "scalar_threshold_fallback",
+      "best_explicit_implementation": "scalar",
+      "float4_speedup_vs_scalar_p50": 0.9870967741935485,
+      "auto_speedup_vs_scalar_p50": 0.9935064935064936,
+      "auto_speedup_vs_best_explicit_p50": 0.9935064935064936,
+      "maximum_abs_error": 1e-06
+    },
+    {
+      "shape": {
+        "name": "stage2_128x16x16",
+        "batch": 1,
+        "channels": 128,
+        "height": 16,
+        "width": 16,
+        "elements": 32768
+      },
+      "mode": "in-place",
+      "scalar_median_p50_ms": 0.004768,
+      "float4_median_p50_ms": 0.004768,
+      "auto_median_p50_ms": 0.004768,
+      "auto_selected_kernel_path": "scalar_threshold_fallback",
+      "best_explicit_implementation": "scalar",
+      "float4_speedup_vs_scalar_p50": 1.0,
+      "auto_speedup_vs_scalar_p50": 1.0,
+      "auto_speedup_vs_best_explicit_p50": 1.0,
+      "maximum_abs_error": 1e-06
+    },
+    {
+      "shape": {
+        "name": "stage3_256x8x8",
+        "batch": 1,
+        "channels": 256,
+        "height": 8,
+        "width": 8,
+        "elements": 16384
+      },
+      "mode": "out-of-place",
+      "scalar_median_p50_ms": 0.00464,
+      "float4_median_p50_ms": 0.00496,
+      "auto_median_p50_ms": 0.004672,
+      "auto_selected_kernel_path": "scalar_threshold_fallback",
+      "best_explicit_implementation": "scalar",
+      "float4_speedup_vs_scalar_p50": 0.935483870967742,
+      "auto_speedup_vs_scalar_p50": 0.9931506849315068,
+      "auto_speedup_vs_best_explicit_p50": 0.9931506849315068,
+      "maximum_abs_error": 1e-06
+    },
+    {
+      "shape": {
+        "name": "stage3_256x8x8",
+        "batch": 1,
+        "channels": 256,
+        "height": 8,
+        "width": 8,
+        "elements": 16384
+      },
+      "mode": "in-place",
+      "scalar_median_p50_ms": 0.004544,
+      "float4_median_p50_ms": 0.004704,
+      "auto_median_p50_ms": 0.004544,
+      "auto_selected_kernel_path": "scalar_threshold_fallback",
+      "best_explicit_implementation": "scalar",
+      "float4_speedup_vs_scalar_p50": 0.9659863945578232,
+      "auto_speedup_vs_scalar_p50": 1.0,
+      "auto_speedup_vs_best_explicit_p50": 1.0,
+      "maximum_abs_error": 1e-06
+    },
+    {
+      "shape": {
+        "name": "stage4_512x4x4",
+        "batch": 1,
+        "channels": 512,
+        "height": 4,
+        "width": 4,
+        "elements": 8192
+      },
+      "mode": "out-of-place",
+      "scalar_median_p50_ms": 0.004512,
+      "float4_median_p50_ms": 0.004864,
+      "auto_median_p50_ms": 0.004512,
+      "auto_selected_kernel_path": "scalar_threshold_fallback",
+      "best_explicit_implementation": "scalar",
+      "float4_speedup_vs_scalar_p50": 0.9276315789473685,
+      "auto_speedup_vs_scalar_p50": 1.0,
+      "auto_speedup_vs_best_explicit_p50": 1.0,
+      "maximum_abs_error": 1e-06
+    },
+    {
+      "shape": {
+        "name": "stage4_512x4x4",
+        "batch": 1,
+        "channels": 512,
+        "height": 4,
+        "width": 4,
+        "elements": 8192
+      },
+      "mode": "in-place",
+      "scalar_median_p50_ms": 0.00448,
+      "float4_median_p50_ms": 0.004736,
+      "auto_median_p50_ms": 0.004448,
+      "auto_selected_kernel_path": "scalar_threshold_fallback",
+      "best_explicit_implementation": "scalar",
+      "float4_speedup_vs_scalar_p50": 0.9459459459459459,
+      "auto_speedup_vs_scalar_p50": 1.0071942446043165,
+      "auto_speedup_vs_best_explicit_p50": 1.0071942446043165,
+      "maximum_abs_error": 1e-06
+    }
+  ]
+}
