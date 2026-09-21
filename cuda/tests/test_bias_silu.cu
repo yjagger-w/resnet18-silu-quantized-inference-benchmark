@@ -3,7 +3,6 @@
 
 #include <cuda_runtime.h>
 
-#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -18,10 +17,11 @@ constexpr int kCTestSkipReturnCode = 77;
 constexpr float kAbsoluteTolerance = 2.0e-6F;
 constexpr float kRelativeTolerance = 2.0e-6F;
 
-struct Shape {
+struct ShapeCase {
     std::size_t batch_size;
     std::size_t channel_count;
     std::size_t spatial_size;
+    silu_cuda::BiasSiluKernelPath expected_path;
 };
 
 class DeviceBuffer {
@@ -58,6 +58,22 @@ bool host_contract_is_valid() {
             0,
             3,
             32
+        ) != cudaSuccess
+        || silu_cuda::launch_bias_silu_nchw_scalar(
+            nullptr,
+            nullptr,
+            nullptr,
+            1,
+            0,
+            32
+        ) != cudaSuccess
+        || silu_cuda::launch_bias_silu_nchw_vectorized(
+            nullptr,
+            nullptr,
+            nullptr,
+            1,
+            3,
+            0
         ) != cudaSuccess) {
         std::cerr << "Zero-sized Bias+SiLU must be a no-op.\n";
         return false;
@@ -100,7 +116,7 @@ bool host_contract_is_valid() {
         return false;
     }
 
-    if (silu_cuda::launch_bias_silu_nchw(
+    if (silu_cuda::launch_bias_silu_nchw_vectorized(
             &dummy,
             &dummy,
             &dummy,
@@ -109,6 +125,15 @@ bool host_contract_is_valid() {
             1
         ) != cudaErrorInvalidValue) {
         std::cerr << "Bias+SiLU must reject shape overflow.\n";
+        return false;
+    }
+
+    if (silu_cuda::select_bias_silu_nchw_kernel_path(
+            nullptr,
+            nullptr,
+            4
+        ) != silu_cuda::BiasSiluKernelPath::kScalar) {
+        std::cerr << "Null pointers must select the scalar fallback.\n";
         return false;
     }
 
@@ -142,7 +167,7 @@ std::vector<float> make_bias(std::size_t channel_count) {
 std::vector<float> make_reference(
     const std::vector<float>& input,
     const std::vector<float>& bias,
-    const Shape& shape
+    const ShapeCase& shape
 ) {
     std::vector<float> reference(input.size());
 
@@ -197,38 +222,63 @@ bool outputs_match(
     return true;
 }
 
-bool run_shape_case(const Shape& shape) {
+void copy_to_device(
+    float* destination,
+    const std::vector<float>& source
+) {
+    SILU_CUDA_CHECK(cudaMemcpy(
+        destination,
+        source.data(),
+        source.size() * sizeof(float),
+        cudaMemcpyHostToDevice
+    ));
+}
+
+bool copy_and_compare(
+    const char* mode,
+    const float* device_output,
+    const std::vector<float>& reference
+) {
+    std::vector<float> actual(reference.size());
+    SILU_CUDA_CHECK(cudaDeviceSynchronize());
+    SILU_CUDA_CHECK(cudaMemcpy(
+        actual.data(),
+        device_output,
+        actual.size() * sizeof(float),
+        cudaMemcpyDeviceToHost
+    ));
+    return outputs_match(mode, reference, actual);
+}
+
+bool run_shape_case(const ShapeCase& shape) {
     const std::size_t element_count =
         shape.batch_size
         * shape.channel_count
         * shape.spatial_size;
 
-    const std::vector<float> input =
-        make_input(element_count);
-    const std::vector<float> bias =
-        make_bias(shape.channel_count);
+    const std::vector<float> input = make_input(element_count);
+    const std::vector<float> bias = make_bias(shape.channel_count);
     const std::vector<float> reference =
         make_reference(input, bias, shape);
-    std::vector<float> actual(element_count);
 
     DeviceBuffer device_input(element_count);
     DeviceBuffer device_bias(shape.channel_count);
     DeviceBuffer device_output(element_count);
+    copy_to_device(device_input.get(), input);
+    copy_to_device(device_bias.get(), bias);
 
-    SILU_CUDA_CHECK(cudaMemcpy(
-        device_input.get(),
-        input.data(),
-        element_count * sizeof(float),
-        cudaMemcpyHostToDevice
-    ));
-    SILU_CUDA_CHECK(cudaMemcpy(
-        device_bias.get(),
-        bias.data(),
-        shape.channel_count * sizeof(float),
-        cudaMemcpyHostToDevice
-    ));
+    const silu_cuda::BiasSiluKernelPath selected_path =
+        silu_cuda::select_bias_silu_nchw_kernel_path(
+            device_input.get(),
+            device_output.get(),
+            shape.spatial_size
+        );
+    if (selected_path != shape.expected_path) {
+        std::cerr << "Bias+SiLU selected an unexpected kernel path.\n";
+        return false;
+    }
 
-    SILU_CUDA_CHECK(silu_cuda::launch_bias_silu_nchw(
+    SILU_CUDA_CHECK(silu_cuda::launch_bias_silu_nchw_scalar(
         device_input.get(),
         device_bias.get(),
         device_output.get(),
@@ -236,29 +286,32 @@ bool run_shape_case(const Shape& shape) {
         shape.channel_count,
         shape.spatial_size
     ));
-    SILU_CUDA_CHECK(cudaDeviceSynchronize());
-    SILU_CUDA_CHECK(cudaMemcpy(
-        actual.data(),
-        device_output.get(),
-        element_count * sizeof(float),
-        cudaMemcpyDeviceToHost
-    ));
-
-    if (!outputs_match(
-            "Out-of-place Bias+SiLU",
-            reference,
-            actual
+    if (!copy_and_compare(
+            "Scalar out-of-place Bias+SiLU",
+            device_output.get(),
+            reference
         )) {
         return false;
     }
 
-    SILU_CUDA_CHECK(cudaMemcpy(
-        device_input.get(),
-        input.data(),
-        element_count * sizeof(float),
-        cudaMemcpyHostToDevice
-    ));
     SILU_CUDA_CHECK(silu_cuda::launch_bias_silu_nchw(
+        device_input.get(),
+        device_bias.get(),
+        device_output.get(),
+        shape.batch_size,
+        shape.channel_count,
+        shape.spatial_size
+    ));
+    if (!copy_and_compare(
+            "Auto-dispatch out-of-place Bias+SiLU",
+            device_output.get(),
+            reference
+        )) {
+        return false;
+    }
+
+    copy_to_device(device_input.get(), input);
+    SILU_CUDA_CHECK(silu_cuda::launch_bias_silu_nchw_vectorized(
         device_input.get(),
         device_bias.get(),
         device_input.get(),
@@ -266,18 +319,58 @@ bool run_shape_case(const Shape& shape) {
         shape.channel_count,
         shape.spatial_size
     ));
-    SILU_CUDA_CHECK(cudaDeviceSynchronize());
-    SILU_CUDA_CHECK(cudaMemcpy(
-        actual.data(),
+    return copy_and_compare(
+        "Vectorized-entry in-place Bias+SiLU",
         device_input.get(),
-        element_count * sizeof(float),
-        cudaMemcpyDeviceToHost
-    ));
+        reference
+    );
+}
 
-    return outputs_match(
-        "In-place Bias+SiLU",
-        reference,
-        actual
+bool run_misaligned_fallback_case() {
+    constexpr ShapeCase shape = {
+        1,
+        3,
+        8,
+        silu_cuda::BiasSiluKernelPath::kScalar,
+    };
+    const std::size_t element_count =
+        shape.batch_size
+        * shape.channel_count
+        * shape.spatial_size;
+    const std::vector<float> input = make_input(element_count);
+    const std::vector<float> bias = make_bias(shape.channel_count);
+    const std::vector<float> reference =
+        make_reference(input, bias, shape);
+
+    DeviceBuffer input_storage(element_count + 1);
+    DeviceBuffer output_storage(element_count + 1);
+    DeviceBuffer device_bias(shape.channel_count);
+    float* const misaligned_input = input_storage.get() + 1;
+    float* const misaligned_output = output_storage.get() + 1;
+    copy_to_device(misaligned_input, input);
+    copy_to_device(device_bias.get(), bias);
+
+    if (silu_cuda::select_bias_silu_nchw_kernel_path(
+            misaligned_input,
+            misaligned_output,
+            shape.spatial_size
+        ) != silu_cuda::BiasSiluKernelPath::kScalar) {
+        std::cerr << "Misaligned pointers must select scalar fallback.\n";
+        return false;
+    }
+
+    SILU_CUDA_CHECK(silu_cuda::launch_bias_silu_nchw_vectorized(
+        misaligned_input,
+        device_bias.get(),
+        misaligned_output,
+        shape.batch_size,
+        shape.channel_count,
+        shape.spatial_size
+    ));
+    return copy_and_compare(
+        "Misaligned scalar-fallback Bias+SiLU",
+        misaligned_output,
+        reference
     );
 }
 
@@ -309,23 +402,27 @@ int main() {
     }
 
     try {
-        constexpr std::array<Shape, 4> shapes = {{
-            {1, 1, 1},
-            {1, 3, 32 * 32},
-            {2, 17, 37},
-            {3, 64, 7 * 7},
+        constexpr std::array<ShapeCase, 5> shapes = {{
+            {1, 1, 1, silu_cuda::BiasSiluKernelPath::kScalar},
+            {1, 3, 32 * 32, silu_cuda::BiasSiluKernelPath::kFloat4},
+            {2, 17, 36, silu_cuda::BiasSiluKernelPath::kFloat4},
+            {2, 17, 37, silu_cuda::BiasSiluKernelPath::kScalar},
+            {3, 64, 7 * 7, silu_cuda::BiasSiluKernelPath::kScalar},
         }};
 
-        for (const Shape& shape : shapes) {
+        for (const ShapeCase& shape : shapes) {
             if (!run_shape_case(shape)) {
                 return 1;
             }
         }
 
+        if (!run_misaligned_fallback_case()) {
+            return 1;
+        }
+
         std::cout
-            << "PASS: fused NCHW Bias+SiLU matched the CPU reference for "
-            << shapes.size()
-            << " shapes, including in-place execution.\n";
+            << "PASS: scalar, float4, automatic fallback, and in-place "
+            << "NCHW Bias+SiLU matched the CPU reference.\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

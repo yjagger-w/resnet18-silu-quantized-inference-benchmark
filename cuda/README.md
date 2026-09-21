@@ -5,9 +5,9 @@ benchmark. It is intentionally independent from the existing `cpp/` project
 so the CPU and CUDA baselines can be configured and tested separately.
 
 The milestones establish a vector-add scaffold, atomic and hierarchical
-reductions, reproducible CUDA Event benchmarking, and a fused FP32 NCHW
-Bias+SiLU correctness baseline. Performance claims are made only from recorded
-GPU benchmark artifacts, not from CTest process duration.
+reductions, reproducible CUDA Event benchmarking, and fused FP32 NCHW
+Bias+SiLU scalar and float4 correctness baselines. Performance claims are made
+only from recorded GPU benchmark artifacts, not from CTest process duration.
 
 ## Requirements
 
@@ -100,10 +100,20 @@ output[n, c, h, w] =
 
 The interface accepts flattened contiguous NCHW storage, a channel bias vector,
 batch size, channel count, and flattened spatial size. It supports in-place
-execution when `output == input`. Its correctness test covers scalar and
-multi-channel shapes, negative and positive activation ranges, channel
-broadcasting, shape-overflow rejection, non-finite output detection, and
-in-place execution.
+execution when `output == input`.
 
-Vectorized loads, FP16, Bias+SiLU CUDA Event benchmarks, Nsight Compute
-profiling, and end-to-end ResNet integration belong to later milestones.
+The scalar entry point preserves the original element-wise baseline. The
+vectorized entry point processes four contiguous spatial values per thread
+through aligned `float4` loads and stores. The backward-compatible
+`launch_bias_silu_nchw` entry point auto-dispatches to `float4` only when
+both data pointers are 16-byte aligned and every channel plane contains a
+multiple of four elements. Other layouts automatically fall back to the scalar
+kernel, so no padding or tail handling is required from callers.
+
+The correctness test compares scalar and auto-dispatched results with one CPU
+reference, exercises aligned float4 and non-multiple-of-four shapes, forces a
+misaligned-pointer fallback, checks non-finite outputs, and covers in-place
+execution.
+
+FP16, Bias+SiLU CUDA Event benchmarks, Nsight Compute profiling, and end-to-end
+ResNet integration belong to later milestones.
