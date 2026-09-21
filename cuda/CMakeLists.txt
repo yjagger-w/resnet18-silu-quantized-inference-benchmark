@@ -56,6 +56,23 @@ target_compile_definitions(cuda_reduction_benchmark PRIVATE
     SILU_CXX_COMPILER_VERSION="${CMAKE_CXX_COMPILER_VERSION}"
 )
 
+add_executable(cuda_bias_silu_benchmark
+    tools/bias_silu_benchmark.cu
+)
+target_link_libraries(cuda_bias_silu_benchmark PRIVATE
+    silu_cuda_kernels
+    CUDA::cudart
+)
+target_compile_features(cuda_bias_silu_benchmark PRIVATE
+    cxx_std_17
+    cuda_std_17
+)
+target_compile_definitions(cuda_bias_silu_benchmark PRIVATE
+    SILU_CUDA_COMPILER_VERSION="${CMAKE_CUDA_COMPILER_VERSION}"
+    SILU_CXX_COMPILER_ID="${CMAKE_CXX_COMPILER_ID}"
+    SILU_CXX_COMPILER_VERSION="${CMAKE_CXX_COMPILER_VERSION}"
+)
+
 if(BUILD_TESTING)
     add_executable(test_cuda_vector_add
         tests/test_vector_add.cu
@@ -114,6 +131,20 @@ if(BUILD_TESTING)
     )
     set_tests_properties(
         cuda_reduction_benchmark_rejects_zero_iterations
+        PROPERTIES
+        WILL_FAIL TRUE
+    )
+
+    add_test(
+        NAME cuda_bias_silu_benchmark_help
+        COMMAND cuda_bias_silu_benchmark --help
+    )
+    add_test(
+        NAME cuda_bias_silu_benchmark_rejects_zero_iterations
+        COMMAND cuda_bias_silu_benchmark --iterations 0
+    )
+    set_tests_properties(
+        cuda_bias_silu_benchmark_rejects_zero_iterations
         PROPERTIES
         WILL_FAIL TRUE
     )

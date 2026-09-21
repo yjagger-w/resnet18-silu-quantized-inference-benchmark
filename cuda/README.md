@@ -115,5 +115,35 @@ reference, exercises aligned float4 and non-multiple-of-four shapes, forces a
 misaligned-pointer fallback, checks non-finite outputs, and covers in-place
 execution.
 
-FP16, Bias+SiLU CUDA Event benchmarks, Nsight Compute profiling, and end-to-end
-ResNet integration belong to later milestones.
+## Bias+SiLU benchmark
+
+The Bias+SiLU benchmark covers the four CIFAR-10 ResNet18 stage-output shapes
+from 64x32x32 through 512x4x4. It compares explicit scalar, explicit float4,
+and automatic dispatch in both out-of-place and in-place modes. Each result
+records mean/P50/P90/P95/P99/min/max latency, the selected kernel path,
+effective tensor bandwidth, maximum absolute error, and speedup relative to
+the matching scalar mode.
+
+For in-place measurements, an untimed device-to-device copy restores the input
+before every launch. CUDA Events therefore measure only the Bias+SiLU kernel,
+while all implementations receive identical input values.
+
+Run the complete comparison:
+
+```bash
+mkdir -p out/cuda/v1.7
+
+./build/cuda-release/cuda_bias_silu_benchmark \
+  --warmup 20 \
+  --iterations 200 \
+  --implementation all \
+  --mode both \
+  | tee out/cuda/v1.7/bias_silu_t4_resnet18.json
+```
+
+Use `--implementation scalar|float4|auto` or
+`--mode out-of-place|in-place` for isolated runs. A speedup is emitted only
+when the matching scalar result is part of the same run.
+
+FP16, Nsight Compute profiling, and end-to-end ResNet integration belong to
+later milestones.
