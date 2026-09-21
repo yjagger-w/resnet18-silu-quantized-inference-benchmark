@@ -21,7 +21,8 @@ struct ShapeCase {
     std::size_t batch_size;
     std::size_t channel_count;
     std::size_t spatial_size;
-    silu_cuda::BiasSiluKernelPath expected_path;
+    silu_cuda::BiasSiluKernelPath expected_layout_path;
+    silu_cuda::BiasSiluKernelPath expected_auto_path;
 };
 
 class DeviceBuffer {
@@ -267,14 +268,27 @@ bool run_shape_case(const ShapeCase& shape) {
     copy_to_device(device_input.get(), input);
     copy_to_device(device_bias.get(), bias);
 
-    const silu_cuda::BiasSiluKernelPath selected_path =
+    const silu_cuda::BiasSiluKernelPath layout_path =
         silu_cuda::select_bias_silu_nchw_kernel_path(
             device_input.get(),
             device_output.get(),
             shape.spatial_size
         );
-    if (selected_path != shape.expected_path) {
-        std::cerr << "Bias+SiLU selected an unexpected kernel path.\n";
+    if (layout_path != shape.expected_layout_path) {
+        std::cerr << "Bias+SiLU selected an unexpected layout path.\n";
+        return false;
+    }
+
+    const silu_cuda::BiasSiluKernelPath auto_path =
+        silu_cuda::select_bias_silu_nchw_auto_path(
+            device_input.get(),
+            device_output.get(),
+            shape.batch_size,
+            shape.channel_count,
+            shape.spatial_size
+        );
+    if (auto_path != shape.expected_auto_path) {
+        std::cerr << "Bias+SiLU selected an unexpected automatic path.\n";
         return false;
     }
 
@@ -402,12 +416,25 @@ int main() {
     }
 
     try {
-        constexpr std::array<ShapeCase, 5> shapes = {{
-            {1, 1, 1, silu_cuda::BiasSiluKernelPath::kScalar},
-            {1, 3, 32 * 32, silu_cuda::BiasSiluKernelPath::kFloat4},
-            {2, 17, 36, silu_cuda::BiasSiluKernelPath::kFloat4},
-            {2, 17, 37, silu_cuda::BiasSiluKernelPath::kScalar},
-            {3, 64, 7 * 7, silu_cuda::BiasSiluKernelPath::kScalar},
+        constexpr std::array<ShapeCase, 6> shapes = {{
+            {1, 1, 1,
+             silu_cuda::BiasSiluKernelPath::kScalar,
+             silu_cuda::BiasSiluKernelPath::kScalar},
+            {1, 64, 32 * 32,
+             silu_cuda::BiasSiluKernelPath::kFloat4,
+             silu_cuda::BiasSiluKernelPath::kFloat4},
+            {1, 128, 16 * 16,
+             silu_cuda::BiasSiluKernelPath::kFloat4,
+             silu_cuda::BiasSiluKernelPath::kScalar},
+            {2, 17, 36,
+             silu_cuda::BiasSiluKernelPath::kFloat4,
+             silu_cuda::BiasSiluKernelPath::kScalar},
+            {2, 17, 37,
+             silu_cuda::BiasSiluKernelPath::kScalar,
+             silu_cuda::BiasSiluKernelPath::kScalar},
+            {3, 64, 7 * 7,
+             silu_cuda::BiasSiluKernelPath::kScalar,
+             silu_cuda::BiasSiluKernelPath::kScalar},
         }};
 
         for (const ShapeCase& shape : shapes) {
@@ -421,8 +448,8 @@ int main() {
         }
 
         std::cout
-            << "PASS: scalar, float4, automatic fallback, and in-place "
-            << "NCHW Bias+SiLU matched the CPU reference.\n";
+            << "PASS: scalar, explicit float4, adaptive dispatch, and "
+            << "in-place NCHW Bias+SiLU matched the CPU reference.\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

@@ -158,6 +158,33 @@ cudaError_t launch_scalar_validated(
     return cudaGetLastError();
 }
 
+cudaError_t launch_float4_validated(
+    const float* input,
+    const float* bias,
+    float* output,
+    std::size_t element_count,
+    std::size_t channel_count,
+    std::size_t spatial_size,
+    cudaStream_t stream
+) noexcept {
+    const std::size_t vector_count = element_count / 4;
+    const std::size_t vectors_per_channel = spatial_size / 4;
+    bias_silu_nchw_float4_kernel<<<
+        launch_block_count(vector_count),
+        kThreadsPerBlock,
+        0,
+        stream
+    >>>(
+        reinterpret_cast<const float4*>(input),
+        bias,
+        reinterpret_cast<float4*>(output),
+        vector_count,
+        channel_count,
+        vectors_per_channel
+    );
+    return cudaGetLastError();
+}
+
 }  // namespace
 
 namespace silu_cuda {
@@ -183,6 +210,36 @@ BiasSiluKernelPath select_bias_silu_nchw_kernel_path(
     return input_is_aligned && output_is_aligned
         ? BiasSiluKernelPath::kFloat4
         : BiasSiluKernelPath::kScalar;
+}
+
+BiasSiluKernelPath select_bias_silu_nchw_auto_path(
+    const float* input,
+    const float* output,
+    std::size_t batch_size,
+    std::size_t channel_count,
+    std::size_t spatial_size
+) noexcept {
+    std::size_t batch_channels = 0;
+    std::size_t element_count = 0;
+    if (!checked_multiply(
+            batch_size,
+            channel_count,
+            &batch_channels
+        )
+        || !checked_multiply(
+            batch_channels,
+            spatial_size,
+            &element_count
+        )
+        || element_count < kBiasSiluFloat4MinimumElements) {
+        return BiasSiluKernelPath::kScalar;
+    }
+
+    return select_bias_silu_nchw_kernel_path(
+        input,
+        output,
+        spatial_size
+    );
 }
 
 cudaError_t launch_bias_silu_nchw_scalar(
@@ -258,22 +315,15 @@ cudaError_t launch_bias_silu_nchw_vectorized(
         );
     }
 
-    const std::size_t vector_count = element_count / 4;
-    const std::size_t vectors_per_channel = spatial_size / 4;
-    bias_silu_nchw_float4_kernel<<<
-        launch_block_count(vector_count),
-        kThreadsPerBlock,
-        0,
-        stream
-    >>>(
-        reinterpret_cast<const float4*>(input),
+    return launch_float4_validated(
+        input,
         bias,
-        reinterpret_cast<float4*>(output),
-        vector_count,
+        output,
+        element_count,
         channel_count,
-        vectors_per_channel
+        spatial_size,
+        stream
     );
-    return cudaGetLastError();
 }
 
 cudaError_t launch_bias_silu_nchw(
@@ -285,11 +335,43 @@ cudaError_t launch_bias_silu_nchw(
     std::size_t spatial_size,
     cudaStream_t stream
 ) noexcept {
-    return launch_bias_silu_nchw_vectorized(
+    std::size_t element_count = 0;
+    const cudaError_t validation_status = validate_arguments(
         input,
         bias,
         output,
         batch_size,
+        channel_count,
+        spatial_size,
+        &element_count
+    );
+    if (validation_status != cudaSuccess || element_count == 0) {
+        return validation_status;
+    }
+
+    if (select_bias_silu_nchw_auto_path(
+            input,
+            output,
+            batch_size,
+            channel_count,
+            spatial_size
+        ) == BiasSiluKernelPath::kFloat4) {
+        return launch_float4_validated(
+            input,
+            bias,
+            output,
+            element_count,
+            channel_count,
+            spatial_size,
+            stream
+        );
+    }
+
+    return launch_scalar_validated(
+        input,
+        bias,
+        output,
+        element_count,
         channel_count,
         spatial_size,
         stream

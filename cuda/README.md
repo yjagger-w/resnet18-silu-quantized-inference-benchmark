@@ -103,17 +103,23 @@ batch size, channel count, and flattened spatial size. It supports in-place
 execution when `output == input`.
 
 The scalar entry point preserves the original element-wise baseline. The
-vectorized entry point processes four contiguous spatial values per thread
-through aligned `float4` loads and stores. The backward-compatible
-`launch_bias_silu_nchw` entry point auto-dispatches to `float4` only when
-both data pointers are 16-byte aligned and every channel plane contains a
-multiple of four elements. Other layouts automatically fall back to the scalar
-kernel, so no padding or tail handling is required from callers.
+explicit vectorized entry point processes four contiguous spatial values per
+thread through aligned `float4` loads and stores whenever layout permits, so
+benchmarks and callers can still force that implementation.
 
-The correctness test compares scalar and auto-dispatched results with one CPU
-reference, exercises aligned float4 and non-multiple-of-four shapes, forces a
-misaligned-pointer fallback, checks non-finite outputs, and covers in-place
-execution.
+The backward-compatible `launch_bias_silu_nchw` entry point uses adaptive
+dispatch. It selects `float4` only when both data pointers are 16-byte aligned,
+every channel plane contains a multiple of four elements, and the tensor has at
+least 65,536 elements. Smaller or ineligible tensors use the scalar kernel.
+The threshold comes from five repeated Tesla T4 / CUDA 12.4 benchmark runs:
+the 64x32x32 stem consistently benefited from float4, while the smaller stage
+outputs were tied or faster with scalar. It is a T4-specific policy rather than
+a universal cross-GPU tuning claim.
+
+The correctness test compares scalar, explicit float4, and adaptive results
+with one CPU reference, covers both sides of the dispatch threshold, exercises
+non-multiple-of-four shapes, forces a misaligned-pointer fallback, checks
+non-finite outputs, and covers in-place execution.
 
 ## Bias+SiLU benchmark
 
@@ -122,7 +128,8 @@ from 64x32x32 through 512x4x4. It compares explicit scalar, explicit float4,
 and automatic dispatch in both out-of-place and in-place modes. Each result
 records mean/P50/P90/P95/P99/min/max latency, the selected kernel path,
 effective tensor bandwidth, maximum absolute error, and speedup relative to
-the matching scalar mode.
+the matching scalar mode. Automatic results distinguish a layout fallback
+from the benchmark-derived small-tensor threshold fallback.
 
 For in-place measurements, an untimed device-to-device copy restores the input
 before every launch. CUDA Events therefore measure only the Bias+SiLU kernel,

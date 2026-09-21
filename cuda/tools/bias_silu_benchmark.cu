@@ -327,13 +327,29 @@ std::string selected_path_name(
     if (implementation == "scalar") {
         return "scalar";
     }
-    return silu_cuda::select_bias_silu_nchw_kernel_path(
+
+    const silu_cuda::BiasSiluKernelPath layout_path =
+        silu_cuda::select_bias_silu_nchw_kernel_path(
+            input,
+            output,
+            shape.spatial_size()
+        );
+    if (layout_path != silu_cuda::BiasSiluKernelPath::kFloat4) {
+        return "scalar_layout_fallback";
+    }
+    if (implementation == "float4") {
+        return "float4";
+    }
+
+    return silu_cuda::select_bias_silu_nchw_auto_path(
         input,
         output,
+        shape.batch_size,
+        shape.channel_count,
         shape.spatial_size()
     ) == silu_cuda::BiasSiluKernelPath::kFloat4
         ? "float4"
-        : "scalar_fallback";
+        : "scalar_threshold_fallback";
 }
 
 double validate_output(
