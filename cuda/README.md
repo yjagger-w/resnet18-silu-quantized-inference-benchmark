@@ -138,9 +138,38 @@ execution.
 
 The FP16 test covers aligned half2, odd spatial sizes, deliberately misaligned
 pointers, shape overflow, zero-sized no-ops, in-place execution, finite outputs,
-and comparison against an FP32 CPU reference. This milestone makes no FP16
-performance claim; T4 latency measurements belong to a separate benchmark
-commit.
+and comparison against an FP32 CPU reference.
+
+## FP16 Bias+SiLU benchmark
+
+The separate FP16 benchmark compares scalar, explicit half2, and automatic
+dispatch for the same four CIFAR-10 ResNet18 stage-output shapes and both
+out-of-place and in-place execution. It uses FP16 input, bias, and output
+storage while the kernels evaluate Bias+SiLU in FP32 before rounding back to
+FP16. Results use the same interleaved CUDA Event protocol as the FP32
+benchmark and include numerical validation against an FP32 CPU reference.
+
+Run one complete comparison:
+
+```bash
+mkdir -p out/cuda/v1.7/fp16_bias_silu
+
+./build/cuda-release/cuda_bias_silu_fp16_benchmark \
+  --warmup 50 \
+  --iterations 1000 \
+  --implementation all \
+  --mode both \
+  > out/cuda/v1.7/fp16_bias_silu/run_1.json
+
+python3 -m json.tool \
+  out/cuda/v1.7/fp16_bias_silu/run_1.json \
+  >/dev/null
+```
+
+Use `--implementation scalar|half2|auto` or
+`--mode out-of-place|in-place` for isolated runs. For the final T4 evidence,
+run the command three times and report the median P50 values; keep only the
+reviewed final JSON and Markdown artifacts.
 
 ## Bias+SiLU benchmark
 
@@ -204,6 +233,5 @@ dispatch relative to scalar, and automatic dispatch relative to the faster
 explicit implementation. Generated files remain under the ignored `out/`
 directory until a reviewed formal result is intentionally promoted.
 
-FP16 performance benchmarking, profiler evidence when the host permits GPU
-performance counters, and end-to-end ResNet integration belong to later
-milestones.
+Profiler evidence remains optional when the host permits GPU performance
+counters. End-to-end ResNet integration belongs to a later milestone.
