@@ -216,6 +216,36 @@ Use `--implementation scalar|float4|auto` or
 `--mode out-of-place|in-place` for isolated runs. A speedup is emitted only
 when the matching scalar result is part of the same run.
 
+## Integration example
+
+`cuda_bias_silu_integration_example` demonstrates the library boundary used
+by an inference caller without depending on a framework. It prepares contiguous
+NCHW input and channel bias buffers, performs host-to-device copies, calls the
+public automatic-dispatch API, synchronizes, copies the result back, and checks
+that every output is finite. It supports FP32 and FP16, all four ResNet18 stage
+shapes, and optional in-place execution.
+
+Run the adaptive FP16 stem path:
+
+```bash
+./build/cuda-release/cuda_bias_silu_integration_example \
+  --precision fp16 \
+  --stage stem \
+  --in-place
+```
+
+Run a smaller FP32 stage:
+
+```bash
+./build/cuda-release/cuda_bias_silu_integration_example \
+  --precision fp32 \
+  --stage stage4
+```
+
+The program prints a compact JSON record containing the shape, selected kernel
+path, execution mode, checksum, and output range. This is a callable integration
+example rather than a claim of complete ResNet inference or framework support.
+
 ## Repeated benchmark aggregation
 
 The standard-library-only aggregation tool validates that all repeated reports

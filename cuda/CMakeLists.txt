@@ -91,6 +91,18 @@ target_compile_definitions(cuda_bias_silu_fp16_benchmark PRIVATE
     SILU_CXX_COMPILER_VERSION="${CMAKE_CXX_COMPILER_VERSION}"
 )
 
+add_executable(cuda_bias_silu_integration_example
+    examples/bias_silu_integration.cu
+)
+target_link_libraries(cuda_bias_silu_integration_example PRIVATE
+    silu_cuda_kernels
+    CUDA::cudart
+)
+target_compile_features(cuda_bias_silu_integration_example PRIVATE
+    cxx_std_17
+    cuda_std_17
+)
+
 if(BUILD_TESTING)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
@@ -195,6 +207,24 @@ if(BUILD_TESTING)
         cuda_bias_silu_fp16_benchmark_rejects_zero_iterations
         PROPERTIES
         WILL_FAIL TRUE
+    )
+
+    add_test(
+        NAME cuda_bias_silu_integration_example_help
+        COMMAND cuda_bias_silu_integration_example --help
+    )
+    add_test(
+        NAME cuda_bias_silu_integration_example_fp16_stem
+        COMMAND
+            cuda_bias_silu_integration_example
+            --precision fp16
+            --stage stem
+            --in-place
+    )
+    set_tests_properties(
+        cuda_bias_silu_integration_example_fp16_stem
+        PROPERTIES
+        SKIP_RETURN_CODE 77
     )
 
     add_test(
