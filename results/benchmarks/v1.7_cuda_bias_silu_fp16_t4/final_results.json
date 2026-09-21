@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "benchmark": "Tesla T4 adaptive FP16 CUDA Bias-SiLU benchmark",
+  "implementation_commit": "0745b5f6a6183a890abe0fde4d100a08ef1f309c",
+  "dispatch_threshold_elements": 65536,
+  "device": {
+    "name": "Tesla T4",
+    "compute_capability": "7.5",
+    "multiprocessor_count": 40,
+    "total_global_memory_bytes": 16709648384,
+    "driver_version": "12.4",
+    "runtime_version": "12.4"
+  },
+  "build": {
+    "cuda_compiler_version": "12.4.131",
+    "host_compiler": "GNU 11.4.0"
+  },
+  "protocol": {
+    "shape_set": "CIFAR-10 ResNet18 stage outputs",
+    "arithmetic": "FP16 storage with FP32 Bias+SiLU math",
+    "warmup_iterations": 50,
+    "measured_iterations": 1000,
+    "iteration_scope": "per implementation",
+    "execution_order": "interleaved round-robin with per-round rotation",
+    "timer": "CUDA events on the default stream",
+    "excluded": "allocation, host transfers, and in-place device reset copies",
+    "effective_bandwidth_definition": "input plus output tensor bytes divided by mean elapsed time; bias traffic excluded"
+  },
+  "resource_usage": {
+    "scalar": {
+      "registers": 24,
+      "stack_bytes": 0,
+      "shared_bytes": 0,
+      "local_bytes": 0
+    },
+    "half2": {
+      "registers": 26,
+      "stack_bytes": 0,
+      "shared_bytes": 0,
+      "local_bytes": 0
+    }
+  },
+  "validation": {
+    "ctest": "11/11 passed",
+    "compute_sanitizer_memcheck_errors": 0,
+    "maximum_observed_absolute_error": 0.00261
+  },
+  "results": [
+    {
+      "shape": "stem_64x32x32",
+      "mode": "out-of-place",
+      "elements": 65536,
+      "scalar_median_p50_us": 6.144,
+      "half2_median_p50_us": 5.568,
+      "auto_median_p50_us": 5.5360000000000005,
+      "auto_path": "half2",
+      "half2_speedup_vs_scalar_p50": 1.1034482758620692,
+      "auto_speedup_vs_scalar_p50": 1.1098265895953756,
+      "max_abs_error": 0.00261
+    },
+    {
+      "shape": "stem_64x32x32",
+      "mode": "in-place",
+      "elements": 65536,
+      "scalar_median_p50_us": 5.952,
+      "half2_median_p50_us": 5.184,
+      "auto_median_p50_us": 5.28,
+      "auto_path": "half2",
+      "half2_speedup_vs_scalar_p50": 1.1481481481481481,
+      "auto_speedup_vs_scalar_p50": 1.1272727272727272,
+      "max_abs_error": 0.00261
+    },
+    {
+      "shape": "stage2_128x16x16",
+      "mode": "out-of-place",
+      "elements": 32768,
+      "scalar_median_p50_us": 5.184,
+      "half2_median_p50_us": 5.056,
+      "auto_median_p50_us": 5.216,
+      "auto_path": "scalar_threshold_fallback",
+      "half2_speedup_vs_scalar_p50": 1.0253164556962024,
+      "auto_speedup_vs_scalar_p50": 0.9938650306748467,
+      "max_abs_error": 0.00261
+    },
+    {
+      "shape": "stage2_128x16x16",
+      "mode": "in-place",
+      "elements": 32768,
+      "scalar_median_p50_us": 5.12,
+      "half2_median_p50_us": 4.864,
+      "auto_median_p50_us": 4.96,
+      "auto_path": "scalar_threshold_fallback",
+      "half2_speedup_vs_scalar_p50": 1.0526315789473684,
+      "auto_speedup_vs_scalar_p50": 1.032258064516129,
+      "max_abs_error": 0.00261
+    },
+    {
+      "shape": "stage3_256x8x8",
+      "mode": "out-of-place",
+      "elements": 16384,
+      "scalar_median_p50_us": 4.832000000000001,
+      "half2_median_p50_us": 4.864,
+      "auto_median_p50_us": 4.928,
+      "auto_path": "scalar_threshold_fallback",
+      "half2_speedup_vs_scalar_p50": 0.9934210526315791,
+      "auto_speedup_vs_scalar_p50": 0.9805194805194807,
+      "max_abs_error": 0.00261
+    },
+    {
+      "shape": "stage3_256x8x8",
+      "mode": "in-place",
+      "elements": 16384,
+      "scalar_median_p50_us": 4.5440000000000005,
+      "half2_median_p50_us": 4.5440000000000005,
+      "auto_median_p50_us": 4.5760000000000005,
+      "auto_path": "scalar_threshold_fallback",
+      "half2_speedup_vs_scalar_p50": 1.0,
+      "auto_speedup_vs_scalar_p50": 0.993006993006993,
+      "max_abs_error": 0.00261
+    },
+    {
+      "shape": "stage4_512x4x4",
+      "mode": "out-of-place",
+      "elements": 8192,
+      "scalar_median_p50_us": 4.5120000000000005,
+      "half2_median_p50_us": 4.6080000000000005,
+      "auto_median_p50_us": 4.5120000000000005,
+      "auto_path": "scalar_threshold_fallback",
+      "half2_speedup_vs_scalar_p50": 0.9791666666666666,
+      "auto_speedup_vs_scalar_p50": 1.0,
+      "max_abs_error": 0.00261
+    },
+    {
+      "shape": "stage4_512x4x4",
+      "mode": "in-place",
+      "elements": 8192,
+      "scalar_median_p50_us": 4.4159999999999995,
+      "half2_median_p50_us": 4.5760000000000005,
+      "auto_median_p50_us": 4.4479999999999995,
+      "auto_path": "scalar_threshold_fallback",
+      "half2_speedup_vs_scalar_p50": 0.9650349650349648,
+      "auto_speedup_vs_scalar_p50": 0.9928057553956835,
+      "max_abs_error": 0.00261
+    }
+  ],
+  "source_runs": [
+    {
+      "filename": "run_1.json",
+      "bytes": 14977,
+      "sha256": "58BCC758E703E2DF5461F85E6BC725C745CC706C0FC71E65865D7D5DA943E86C"
+    },
+    {
+      "filename": "run_2.json",
+      "bytes": 14977,
+      "sha256": "CD844E6E5C8784872E1932F28E63B46E687E6E8857A9C25145C083160943D989"
+    },
+    {
+      "filename": "run_3.json",
+      "bytes": 14977,
+      "sha256": "D4117DF71EB52D037EAB61C0517B782F727CC9A3FAD25FBB195ABBD43C8F70B1"
+    }
+  ],
+  "interpretation": "On this Tesla T4, automatic dispatch uses half2 for the 65,536-element stem tensor and scalar for smaller stage outputs. The threshold is device-specific. Below the threshold, auto and explicit scalar execute the same scalar kernel; small latency differences around 1.0x reflect measurement variation."
+}
