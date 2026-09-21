@@ -5,8 +5,9 @@ benchmark. It is intentionally independent from the existing `cpp/` project
 so the CPU and CUDA baselines can be configured and tested separately.
 
 The milestones establish a vector-add scaffold, atomic and hierarchical
-reductions, reproducible CUDA Event benchmarking, and fused FP32 NCHW
-Bias+SiLU scalar and float4 correctness baselines. Performance claims are made
+reductions, reproducible CUDA Event benchmarking, fused FP32 NCHW
+Bias+SiLU scalar and float4 kernels, and FP16 scalar and half2 correctness
+baselines. Performance claims are made
 only from recorded GPU benchmark artifacts, not from CTest process duration.
 
 ## Requirements
@@ -121,6 +122,26 @@ with one CPU reference, covers both sides of the dispatch threshold, exercises
 non-multiple-of-four shapes, forces a misaligned-pointer fallback, checks
 non-finite outputs, and covers in-place execution.
 
+## FP16 Bias+SiLU correctness baseline
+
+The independent FP16 API mirrors the FP32 NCHW contract with half-precision
+input, channel bias, and output storage. The scalar kernel processes one FP16
+element per thread. The vectorized kernel uses aligned `half2` loads and stores
+for two contiguous spatial values per thread, converts the pair to FP32 for the
+Bias+SiLU calculation, and rounds the outputs back to FP16.
+
+`launch_bias_silu_nchw_fp16` selects half2 when both data pointers satisfy
+four-byte alignment and each channel plane has an even spatial size. Odd sizes
+or misaligned pointers fall back to the scalar FP16 kernel. Explicit scalar and
+vectorized entry points remain available, and all paths support in-place
+execution.
+
+The FP16 test covers aligned half2, odd spatial sizes, deliberately misaligned
+pointers, shape overflow, zero-sized no-ops, in-place execution, finite outputs,
+and comparison against an FP32 CPU reference. This milestone makes no FP16
+performance claim; T4 latency measurements belong to a separate benchmark
+commit.
+
 ## Bias+SiLU benchmark
 
 The Bias+SiLU benchmark covers the four CIFAR-10 ResNet18 stage-output shapes
@@ -183,5 +204,6 @@ dispatch relative to scalar, and automatic dispatch relative to the faster
 explicit implementation. Generated files remain under the ignored `out/`
 directory until a reviewed formal result is intentionally promoted.
 
-FP16, Nsight Compute profiling, and end-to-end ResNet integration belong to
-later milestones.
+FP16 performance benchmarking, profiler evidence when the host permits GPU
+performance counters, and end-to-end ResNet integration belong to later
+milestones.

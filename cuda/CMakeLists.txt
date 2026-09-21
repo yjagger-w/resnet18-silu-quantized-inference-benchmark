@@ -16,6 +16,7 @@ endif()
 
 add_library(silu_cuda_kernels STATIC
     kernels/bias_silu.cu
+    kernels/bias_silu_fp16.cu
     kernels/reduction.cu
     kernels/vector_add.cu
 )
@@ -112,13 +113,27 @@ if(BUILD_TESTING)
         cuda_std_17
     )
 
+    add_executable(test_cuda_bias_silu_fp16
+        tests/test_bias_silu_fp16.cu
+    )
+    target_link_libraries(test_cuda_bias_silu_fp16 PRIVATE
+        silu_cuda_kernels
+        CUDA::cudart
+    )
+    target_compile_features(test_cuda_bias_silu_fp16 PRIVATE
+        cxx_std_17
+        cuda_std_17
+    )
+
     add_test(NAME cuda_vector_add COMMAND test_cuda_vector_add)
     add_test(NAME cuda_reduction COMMAND test_cuda_reduction)
     add_test(NAME cuda_bias_silu COMMAND test_cuda_bias_silu)
+    add_test(NAME cuda_bias_silu_fp16 COMMAND test_cuda_bias_silu_fp16)
     set_tests_properties(
         cuda_vector_add
         cuda_reduction
         cuda_bias_silu
+        cuda_bias_silu_fp16
         PROPERTIES
         SKIP_RETURN_CODE 77
     )
