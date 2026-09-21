@@ -74,6 +74,8 @@ target_compile_definitions(cuda_bias_silu_benchmark PRIVATE
 )
 
 if(BUILD_TESTING)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
     add_executable(test_cuda_vector_add
         tests/test_vector_add.cu
     )
@@ -147,5 +149,12 @@ if(BUILD_TESTING)
         cuda_bias_silu_benchmark_rejects_zero_iterations
         PROPERTIES
         WILL_FAIL TRUE
+    )
+
+    add_test(
+        NAME cuda_bias_silu_aggregation
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_aggregate_bias_silu_results.py"
     )
 endif()

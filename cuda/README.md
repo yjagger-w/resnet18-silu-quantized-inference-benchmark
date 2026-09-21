@@ -160,5 +160,28 @@ Use `--implementation scalar|float4|auto` or
 `--mode out-of-place|in-place` for isolated runs. A speedup is emitted only
 when the matching scalar result is part of the same run.
 
+## Repeated benchmark aggregation
+
+The standard-library-only aggregation tool validates that all repeated reports
+share the same schema, device, build, protocol, result keys, and selected kernel
+paths. It rejects non-finite metrics and numerical errors above the configured
+limit, records every source file SHA256, and emits deterministic JSON and
+Markdown without timestamps or absolute paths.
+
+Aggregate five interleaved runs:
+
+```bash
+python3 cuda/tools/aggregate_bias_silu_results.py \
+  --input-dir out/cuda/v1.7/interleaved_bias_silu \
+  --output-json out/cuda/v1.7/interleaved_bias_silu/aggregate.json \
+  --output-markdown out/cuda/v1.7/interleaved_bias_silu/aggregate_summary.md \
+  --expected-runs 5
+```
+
+The comparison table reports the median of each run's P50 latency, automatic
+dispatch relative to scalar, and automatic dispatch relative to the faster
+explicit implementation. Generated files remain under the ignored `out/`
+directory until a reviewed formal result is intentionally promoted.
+
 FP16, Nsight Compute profiling, and end-to-end ResNet integration belong to
 later milestones.
