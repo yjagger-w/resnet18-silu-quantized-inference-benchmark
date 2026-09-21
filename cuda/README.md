@@ -135,6 +135,14 @@ For in-place measurements, an untimed device-to-device copy restores the input
 before every launch. CUDA Events therefore measure only the Bias+SiLU kernel,
 while all implementations receive identical input values.
 
+Within each shape and mode, warm-up and measured launches are interleaved using
+a deterministic round-robin schedule. The starting implementation rotates
+every round, so scalar, float4, and automatic dispatch collect samples under
+comparable GPU clock and thermal conditions instead of running as three long
+sequential blocks. The JSON protocol records this execution order, and the
+configured iteration counts apply independently to every selected
+implementation.
+
 Run the complete comparison:
 
 ```bash

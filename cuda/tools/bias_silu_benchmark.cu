@@ -11,6 +11,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <iterator>
 #include <numeric>
 #include <stdexcept>
 #include <string>
@@ -435,11 +436,11 @@ Statistics summarize(
     return result;
 }
 
-BenchmarkResult benchmark_case(
+std::vector<BenchmarkResult> benchmark_mode_interleaved(
     const Options& options,
     const ShapeSpec& shape,
     const std::string& mode,
-    const std::string& implementation,
+    const std::vector<std::string>& implementations,
     const std::vector<float>& reference,
     float* device_source,
     float* device_working,
@@ -465,68 +466,116 @@ BenchmarkResult benchmark_case(
             cudaMemcpyDeviceToDevice
         );
     };
-    const auto launch = [&]() -> cudaError_t {
-        return launch_implementation(
-            implementation,
-            launch_input,
-            device_bias,
-            launch_output,
-            shape
-        );
-    };
+    const auto launch =
+        [&](std::size_t implementation_index) -> cudaError_t {
+            return launch_implementation(
+                implementations[implementation_index],
+                launch_input,
+                device_bias,
+                launch_output,
+                shape
+            );
+        };
+    const auto for_each_rotated =
+        [&](int round, const auto& operation) {
+            for (std::size_t offset = 0;
+                 offset < implementations.size();
+                 ++offset) {
+                const std::size_t implementation_index =
+                    (static_cast<std::size_t>(round) + offset)
+                    % implementations.size();
+                operation(implementation_index);
+            }
+        };
 
-    SILU_CUDA_CHECK(prepare());
-    SILU_CUDA_CHECK(launch());
-    const double maximum_error =
-        validate_output(launch_output, reference);
-
-    for (int iteration = 0;
-         iteration < options.warmup_iterations;
-         ++iteration) {
+    std::vector<double> maximum_errors(
+        implementations.size(),
+        0.0
+    );
+    for (std::size_t implementation_index = 0;
+         implementation_index < implementations.size();
+         ++implementation_index) {
         SILU_CUDA_CHECK(prepare());
-        SILU_CUDA_CHECK(launch());
+        SILU_CUDA_CHECK(launch(implementation_index));
+        maximum_errors[implementation_index] =
+            validate_output(launch_output, reference);
+    }
+
+    for (int round = 0;
+         round < options.warmup_iterations;
+         ++round) {
+        for_each_rotated(
+            round,
+            [&](std::size_t implementation_index) {
+                SILU_CUDA_CHECK(prepare());
+                SILU_CUDA_CHECK(launch(implementation_index));
+            }
+        );
     }
     SILU_CUDA_CHECK(cudaDeviceSynchronize());
 
-    CudaEvent start;
-    CudaEvent stop;
-    std::vector<float> samples_ms;
-    samples_ms.reserve(
-        static_cast<std::size_t>(options.measured_iterations)
+    CudaEvent start_event;
+    CudaEvent stop_event;
+    std::vector<std::vector<float>> samples_ms(
+        implementations.size()
     );
-
-    for (int iteration = 0;
-         iteration < options.measured_iterations;
-         ++iteration) {
-        SILU_CUDA_CHECK(prepare());
-        SILU_CUDA_CHECK(cudaEventRecord(start.get()));
-        SILU_CUDA_CHECK(launch());
-        SILU_CUDA_CHECK(cudaEventRecord(stop.get()));
-        SILU_CUDA_CHECK(cudaEventSynchronize(stop.get()));
-
-        float elapsed_ms = 0.0F;
-        SILU_CUDA_CHECK(cudaEventElapsedTime(
-            &elapsed_ms,
-            start.get(),
-            stop.get()
-        ));
-        samples_ms.push_back(elapsed_ms);
+    for (std::vector<float>& samples : samples_ms) {
+        samples.reserve(
+            static_cast<std::size_t>(options.measured_iterations)
+        );
     }
 
-    return {
-        shape,
-        mode,
-        implementation,
-        selected_path_name(
-            implementation,
-            launch_input,
-            launch_output,
-            shape
-        ),
-        summarize(std::move(samples_ms), tensor_bytes * 2),
-        std::numeric_limits<double>::quiet_NaN(),
-        maximum_error,
-    };
+    for (int round = 0;
+         round < options.measured_iterations;
+         ++round) {
+        for_each_rotated(
+            round,
+            [&](std::size_t implementation_index) {
+                SILU_CUDA_CHECK(prepare());
+                SILU_CUDA_CHECK(cudaEventRecord(start_event.get()));
+                SILU_CUDA_CHECK(launch(implementation_index));
+                SILU_CUDA_CHECK(cudaEventRecord(stop_event.get()));
+                SILU_CUDA_CHECK(
+                    cudaEventSynchronize(stop_event.get())
+                );
+
+                float elapsed_ms = 0.0F;
+                SILU_CUDA_CHECK(cudaEventElapsedTime(
+                    &elapsed_ms,
+                    start_event.get(),
+                    stop_event.get()
+                ));
+                samples_ms[implementation_index].push_back(
+                    elapsed_ms
+                );
+            }
+        );
+    }
+
+    std::vector<BenchmarkResult> results;
+    results.reserve(implementations.size());
+    for (std::size_t implementation_index = 0;
+         implementation_index < implementations.size();
+         ++implementation_index) {
+        results.push_back({
+            shape,
+            mode,
+            implementations[implementation_index],
+            selected_path_name(
+                implementations[implementation_index],
+                launch_input,
+                launch_output,
+                shape
+            ),
+            summarize(
+                std::move(samples_ms[implementation_index]),
+                tensor_bytes * 2
+            ),
+            std::numeric_limits<double>::quiet_NaN(),
+            maximum_errors[implementation_index],
+        });
+    }
+    return results;
 }
 
 void add_scalar_speedups(std::vector<BenchmarkResult>* results) {
@@ -617,6 +666,9 @@ void print_json(
         << options.warmup_iterations << ",\n"
         << "    \"measured_iterations\": "
         << options.measured_iterations << ",\n"
+        << "    \"iteration_scope\": \"per implementation\",\n"
+        << "    \"execution_order\": \"interleaved round-robin with "
+        << "per-round rotation\",\n"
         << "    \"timer\": \"CUDA events on the default stream\",\n"
         << "    \"excluded\": \"allocation, host transfers, and "
         << "in-place device reset copies\",\n"
@@ -744,19 +796,23 @@ int main(int argc, char** argv) {
             ));
 
             for (const std::string& mode : modes) {
-                for (const std::string& implementation : implementations) {
-                    results.push_back(benchmark_case(
+                std::vector<BenchmarkResult> mode_results =
+                    benchmark_mode_interleaved(
                         options,
                         shape,
                         mode,
-                        implementation,
+                        implementations,
                         reference,
                         device_source.get(),
                         device_working.get(),
                         device_bias.get(),
                         device_output.get()
-                    ));
-                }
+                    );
+                results.insert(
+                    results.end(),
+                    std::make_move_iterator(mode_results.begin()),
+                    std::make_move_iterator(mode_results.end())
+                );
             }
         }
 
