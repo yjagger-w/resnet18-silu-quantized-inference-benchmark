@@ -22,7 +22,8 @@ struct ShapeCase {
     std::size_t batch_size;
     std::size_t channel_count;
     std::size_t spatial_size;
-    silu_cuda::BiasSiluFp16KernelPath expected_path;
+    silu_cuda::BiasSiluFp16KernelPath expected_layout_path;
+    silu_cuda::BiasSiluFp16KernelPath expected_auto_path;
 };
 
 class DeviceBuffer {
@@ -127,6 +128,28 @@ bool host_contract_is_valid() {
             2
         ) != silu_cuda::BiasSiluFp16KernelPath::kScalar) {
         std::cerr << "Null FP16 pointers must select scalar fallback.\n";
+        return false;
+    }
+
+    alignas(4) __half aligned_input[2] = {};
+    alignas(4) __half aligned_output[2] = {};
+    if (silu_cuda::select_bias_silu_nchw_fp16_auto_path(
+            aligned_input,
+            aligned_output,
+            1,
+            64,
+            1024
+        ) != silu_cuda::BiasSiluFp16KernelPath::kHalf2
+        || silu_cuda::select_bias_silu_nchw_fp16_auto_path(
+            aligned_input,
+            aligned_output,
+            1,
+            64,
+            1022
+        ) != silu_cuda::BiasSiluFp16KernelPath::kScalar) {
+        std::cerr
+            << "FP16 automatic dispatch must honor the 65,536-element "
+            << "threshold.\n";
         return false;
     }
     return true;
@@ -247,9 +270,23 @@ bool run_shape_case(const ShapeCase& shape) {
             device_output.get(),
             shape.spatial_size
         );
-    if (selected_path != shape.expected_path) {
+    if (selected_path != shape.expected_layout_path) {
         std::cerr
-            << "FP16 Bias+SiLU selected an unexpected path.\n";
+            << "FP16 Bias+SiLU selected an unexpected layout path.\n";
+        return false;
+    }
+
+    const auto auto_path =
+        silu_cuda::select_bias_silu_nchw_fp16_auto_path(
+            device_input.get(),
+            device_output.get(),
+            shape.batch_size,
+            shape.channel_count,
+            shape.spatial_size
+        );
+    if (auto_path != shape.expected_auto_path) {
+        std::cerr
+            << "FP16 Bias+SiLU selected an unexpected automatic path.\n";
         return false;
     }
 
@@ -325,6 +362,7 @@ bool run_misaligned_fallback_case() {
         3,
         32,
         silu_cuda::BiasSiluFp16KernelPath::kHalf2,
+        silu_cuda::BiasSiluFp16KernelPath::kScalar,
     };
     const std::size_t element_count =
         shape.batch_size * shape.channel_count * shape.spatial_size;
@@ -344,6 +382,13 @@ bool run_misaligned_fallback_case() {
     if (silu_cuda::select_bias_silu_nchw_fp16_kernel_path(
             misaligned_input,
             misaligned_output,
+            shape.spatial_size
+        ) != silu_cuda::BiasSiluFp16KernelPath::kScalar
+        || silu_cuda::select_bias_silu_nchw_fp16_auto_path(
+            misaligned_input,
+            misaligned_output,
+            shape.batch_size,
+            shape.channel_count,
             shape.spatial_size
         ) != silu_cuda::BiasSiluFp16KernelPath::kScalar) {
         std::cerr
@@ -395,15 +440,31 @@ int main() {
 
     try {
         constexpr std::array<ShapeCase, 5> shapes = {{
-            {1, 1, 1, silu_cuda::BiasSiluFp16KernelPath::kScalar},
-            {1, 64, 32 * 32,
-             silu_cuda::BiasSiluFp16KernelPath::kHalf2},
-            {2, 17, 36,
-             silu_cuda::BiasSiluFp16KernelPath::kHalf2},
-            {2, 17, 37,
-             silu_cuda::BiasSiluFp16KernelPath::kScalar},
-            {3, 64, 7 * 7,
-             silu_cuda::BiasSiluFp16KernelPath::kScalar},
+            {
+                1, 1, 1,
+                silu_cuda::BiasSiluFp16KernelPath::kScalar,
+                silu_cuda::BiasSiluFp16KernelPath::kScalar,
+            },
+            {
+                1, 64, 32 * 32,
+                silu_cuda::BiasSiluFp16KernelPath::kHalf2,
+                silu_cuda::BiasSiluFp16KernelPath::kHalf2,
+            },
+            {
+                2, 17, 36,
+                silu_cuda::BiasSiluFp16KernelPath::kHalf2,
+                silu_cuda::BiasSiluFp16KernelPath::kScalar,
+            },
+            {
+                2, 17, 37,
+                silu_cuda::BiasSiluFp16KernelPath::kScalar,
+                silu_cuda::BiasSiluFp16KernelPath::kScalar,
+            },
+            {
+                3, 64, 7 * 7,
+                silu_cuda::BiasSiluFp16KernelPath::kScalar,
+                silu_cuda::BiasSiluFp16KernelPath::kScalar,
+            },
         }};
 
         for (const ShapeCase& shape : shapes) {
@@ -416,7 +477,7 @@ int main() {
         }
 
         std::cout
-            << "PASS: FP16 scalar, half2, automatic fallback, and "
+            << "PASS: FP16 scalar, half2, adaptive dispatch, and "
             << "in-place NCHW Bias+SiLU matched the FP32 CPU reference.\n";
         return 0;
     } catch (const std::exception& error) {

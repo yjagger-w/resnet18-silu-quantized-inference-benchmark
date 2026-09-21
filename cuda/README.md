@@ -130,15 +130,20 @@ element per thread. The vectorized kernel uses aligned `half2` loads and stores
 for two contiguous spatial values per thread, converts the pair to FP32 for the
 Bias+SiLU calculation, and rounds the outputs back to FP16.
 
-`launch_bias_silu_nchw_fp16` selects half2 when both data pointers satisfy
-four-byte alignment and each channel plane has an even spatial size. Odd sizes
-or misaligned pointers fall back to the scalar FP16 kernel. Explicit scalar and
-vectorized entry points remain available, and all paths support in-place
-execution.
+`launch_bias_silu_nchw_fp16` uses adaptive dispatch. It selects half2 only
+when both data pointers satisfy four-byte alignment, each channel plane has an
+even spatial size, and the tensor contains at least 65,536 elements. Smaller or
+ineligible tensors use scalar. Three repeated Tesla T4 / CUDA 12.4 runs showed
+about 1.18x stem speedup, a stage2 tie, and no reliable benefit for stage3 or
+stage4. Static resource inspection reported 24 registers for scalar and 26 for
+half2, with zero stack, shared, and local memory for both kernels. Explicit
+scalar and vectorized entry points remain available, all paths support in-place
+execution, and the threshold is T4-specific rather than universal.
 
-The FP16 test covers aligned half2, odd spatial sizes, deliberately misaligned
-pointers, shape overflow, zero-sized no-ops, in-place execution, finite outputs,
-and comparison against an FP32 CPU reference.
+The FP16 test covers both sides of the automatic-dispatch threshold, aligned
+half2, odd spatial sizes, deliberately misaligned pointers, shape overflow,
+zero-sized no-ops, in-place execution, finite outputs, and comparison against
+an FP32 CPU reference.
 
 ## FP16 Bias+SiLU benchmark
 
@@ -147,7 +152,8 @@ dispatch for the same four CIFAR-10 ResNet18 stage-output shapes and both
 out-of-place and in-place execution. It uses FP16 input, bias, and output
 storage while the kernels evaluate Bias+SiLU in FP32 before rounding back to
 FP16. Results use the same interleaved CUDA Event protocol as the FP32
-benchmark and include numerical validation against an FP32 CPU reference.
+benchmark, distinguish layout and threshold fallbacks, and include numerical
+validation against an FP32 CPU reference.
 
 Run one complete comparison:
 

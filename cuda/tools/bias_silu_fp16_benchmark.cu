@@ -332,13 +332,28 @@ std::string selected_path_name(
         return "scalar";
     }
 
-    return silu_cuda::select_bias_silu_nchw_fp16_kernel_path(
+    const silu_cuda::BiasSiluFp16KernelPath layout_path =
+        silu_cuda::select_bias_silu_nchw_fp16_kernel_path(
+            input,
+            output,
+            shape.spatial_size()
+        );
+    if (layout_path != silu_cuda::BiasSiluFp16KernelPath::kHalf2) {
+        return "scalar_layout_fallback";
+    }
+    if (implementation == "half2") {
+        return "half2";
+    }
+
+    return silu_cuda::select_bias_silu_nchw_fp16_auto_path(
         input,
         output,
+        shape.batch_size,
+        shape.channel_count,
         shape.spatial_size()
     ) == silu_cuda::BiasSiluFp16KernelPath::kHalf2
         ? "half2"
-        : "scalar_layout_fallback";
+        : "scalar_threshold_fallback";
 }
 
 double validate_output(

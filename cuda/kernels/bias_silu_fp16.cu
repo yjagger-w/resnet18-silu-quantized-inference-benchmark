@@ -213,6 +213,39 @@ BiasSiluFp16KernelPath select_bias_silu_nchw_fp16_kernel_path(
         : BiasSiluFp16KernelPath::kScalar;
 }
 
+BiasSiluFp16KernelPath select_bias_silu_nchw_fp16_auto_path(
+    const __half* input,
+    const __half* output,
+    std::size_t batch_size,
+    std::size_t channel_count,
+    std::size_t spatial_size
+) noexcept {
+    if (select_bias_silu_nchw_fp16_kernel_path(
+            input,
+            output,
+            spatial_size
+        ) != BiasSiluFp16KernelPath::kHalf2) {
+        return BiasSiluFp16KernelPath::kScalar;
+    }
+
+    std::size_t batch_channels = 0;
+    std::size_t element_count = 0;
+    if (!checked_multiply(
+            batch_size,
+            channel_count,
+            &batch_channels
+        )
+        || !checked_multiply(
+            batch_channels,
+            spatial_size,
+            &element_count
+        )
+        || element_count < kBiasSiluFp16Half2MinimumElements) {
+        return BiasSiluFp16KernelPath::kScalar;
+    }
+    return BiasSiluFp16KernelPath::kHalf2;
+}
+
 cudaError_t launch_bias_silu_nchw_fp16_scalar(
     const __half* input,
     const __half* bias,
@@ -305,11 +338,42 @@ cudaError_t launch_bias_silu_nchw_fp16(
     std::size_t spatial_size,
     cudaStream_t stream
 ) noexcept {
-    return launch_bias_silu_nchw_fp16_vectorized(
+    std::size_t element_count = 0;
+    const cudaError_t validation_status = validate_arguments(
         input,
         bias,
         output,
         batch_size,
+        channel_count,
+        spatial_size,
+        &element_count
+    );
+    if (validation_status != cudaSuccess || element_count == 0) {
+        return validation_status;
+    }
+
+    if (select_bias_silu_nchw_fp16_auto_path(
+            input,
+            output,
+            batch_size,
+            channel_count,
+            spatial_size
+        ) == BiasSiluFp16KernelPath::kHalf2) {
+        return launch_half2_validated(
+            input,
+            bias,
+            output,
+            element_count,
+            channel_count,
+            spatial_size,
+            stream
+        );
+    }
+    return launch_scalar_validated(
+        input,
+        bias,
+        output,
+        element_count,
         channel_count,
         spatial_size,
         stream
