@@ -18,6 +18,19 @@ For Galaxy S22 inference, `cifar10-preflight` deterministically exports an ignor
 
 `cifar10-s22-report` converts already-downloaded device outputs into a permanent accuracy/numerical comparison without contacting AI Hub, while `cifar10-full-export` prepares the corresponding complete 10,000-image FP32/QDQ input and local-reference package in the ignored `out/` tree. The offline `cifar10-s22-full-report` command freezes the [completed full-test result](results/benchmarks/v1.6_qnn_cifar10_s22_full_10000/full_accuracy_summary.md): FP32 reaches 93.73% on Galaxy S22 and standard QDQ INT8 reaches 93.68% (-0.05 percentage points) with 0.40647 ms mean latency, a 2.027x speedup over FP32. Standard QDQ INT8 is the recommended deployment; the lower-accuracy, slower piecewise graph remains diagnostic evidence only.
 
+The v1.7 CUDA module is documented in [`cuda/README.md`](cuda/README.md). It provides standalone CUDA vector-add and reduction baselines, fused FP32 scalar/`float4` Bias+SiLU kernels, fused FP16 scalar/`half2` Bias+SiLU kernels, adaptive dispatch, CUDA Event benchmarks, deterministic result aggregation, and a framework-independent integration example.
+
+Reviewed Tesla T4 / CUDA 12.4 stem results are summarized below. Values are median P50 latency from repeated interleaved benchmark runs.
+
+| Precision | Mode | Scalar P50 | Vectorized P50 | Auto P50 | Auto path | Auto/scalar |
+|---|---|---:|---:|---:|---|---:|
+| FP32 | Out-of-place | 6.016 us | 5.440 us | 5.472 us | `float4` | 1.0994x |
+| FP32 | In-place | 5.632 us | 5.024 us | 5.008 us | `float4` | 1.1246x |
+| FP16 | Out-of-place | 6.144 us | 5.568 us | 5.536 us | `half2` | 1.1098x |
+| FP16 | In-place | 5.952 us | 5.184 us | 5.280 us | `half2` | 1.1273x |
+
+All 13 CUDA CTest cases passed on the Tesla T4. Compute Sanitizer reported zero memcheck and synccheck errors, and reduction racecheck reported zero hazards. The `65,536`-element adaptive-dispatch threshold is specific to the recorded Tesla T4 evidence and is not presented as a universal GPU threshold. See the [v1.7.0 release](https://github.com/yjagger-w/resnet18-silu-quantized-inference-benchmark/releases/tag/v1.7.0), [FP16 results](results/benchmarks/v1.7_cuda_bias_silu_fp16_t4/summary.md), and [FP32 results](results/benchmarks/v1.7_cuda_bias_silu_t4/aggregate_summary.md). This release does not claim complete framework integration or end-to-end ResNet acceleration.
+
 A lightweight quantization and deployment benchmark for **ResNet18-SiLU on CIFAR-10**, covering PyTorch FP32 evaluation, ONNX export, ONNX Runtime validation, INT8 post-training quantization, CPU latency benchmarking, quantization matrix evaluation, automatic report generation, and custom **SiLU-aware PTQ** simulation.
 
 This project is designed as a reproducible MVP for AI model quantization, model deployment, and inference performance evaluation.
