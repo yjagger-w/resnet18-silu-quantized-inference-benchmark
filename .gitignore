@@ -70,3 +70,6 @@ client.ini
 *.obj
 *.pdb
 *.ilk
+# v1.8 generated hardware-aware standard-QDQ models and local reports.
+/artifacts/hardware_aware_qdq/v1.8/
+/results/benchmarks/v1.8_hardware_aware_qdq*/
