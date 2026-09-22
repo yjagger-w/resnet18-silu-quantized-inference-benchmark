@@ -1,0 +1,44 @@
+{
+  "schema_version": "hardware-aware-standard-qdq-config/v1.8",
+  "provider": "CPUExecutionProvider",
+  "source_standard_qdq_model": "artifacts/int8/resnet18_silu_int8_v065.onnx",
+  "source_standard_qdq_sha256": "FBA46162C6685D7D23BD6DA0A94D14BFA09F11BABFC776FD5597A9E39C41B3AC",
+  "fp32_model": "artifacts/onnx/resnet18_silu_fp32.onnx",
+  "fp32_model_sha256": "D7F0E89DFD3577FE50CCDF9FAE732C5E2BFFC2CC1BF7F942017A65C9480176DD",
+  "data_root": "data",
+  "calibration_batch": "data_batch_1",
+  "calibration_samples": 2560,
+  "calibration_batch_size": 32,
+  "per_site_calibration_values": 200000,
+  "piecewise_hint": {
+    "candidate_id": "v18_offline_hint_p99_99",
+    "method": "two-segment-piecewise-asymmetric-offline-hint",
+    "vmax_strategy": "percentile",
+    "vmax_percentile": 99.99,
+    "vsplit_strategy": "sample_mse_grid",
+    "vsplit_candidate_count": 128,
+    "bits": 8
+  },
+  "standard_qdq_search": {
+    "bits": 8,
+    "lower_steps": 8,
+    "upper_steps": 24,
+    "central_weight": 2.0,
+    "max_samples": 200000,
+    "source_scale_ratio_min": 0.9,
+    "source_scale_ratio_max": 1.1,
+    "max_zero_point_delta": 4,
+    "minimum_relative_improvement": 0.005
+  },
+  "evaluation_batch": "test_batch",
+  "evaluation_batch_size": 128,
+  "local_promotion_gate": {
+    "required_samples": 10000,
+    "minimum_accuracy_delta_vs_standard_qdq_pp": 0.0,
+    "minimum_prediction_agreement_vs_standard_qdq_percent": 98.0,
+    "fallback_model": "source_standard_qdq_model"
+  },
+  "model_output": "artifacts/hardware_aware_qdq/v1.8/resnet18_silu_aware_standard_qdq.onnx",
+  "manifest_output": "artifacts/hardware_aware_qdq/v1.8/calibration_manifest.json",
+  "report_output": "results/benchmarks/v1.8_hardware_aware_qdq_local"
+}

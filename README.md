@@ -31,6 +31,8 @@ Reviewed Tesla T4 / CUDA 12.4 stem results are summarized below. Values are medi
 
 All 13 CUDA CTest cases passed on the Tesla T4. Compute Sanitizer reported zero memcheck and synccheck errors, and reduction racecheck reported zero hazards. The `65,536`-element adaptive-dispatch threshold is specific to the recorded Tesla T4 evidence and is not presented as a universal GPU threshold. See the [v1.7.0 release](https://github.com/yjagger-w/resnet18-silu-quantized-inference-benchmark/releases/tag/v1.7.0), [FP16 results](results/benchmarks/v1.7_cuda_bias_silu_fp16_t4/summary.md), and [FP32 results](results/benchmarks/v1.7_cuda_bias_silu_t4/aggregate_summary.md). This release does not claim complete framework integration or end-to-end ResNet acceleration.
 
+The experimental v1.8 SiLU-aware standard-QDQ workflow is documented in [`docs/hardware_aware_qdq_v18.md`](docs/hardware_aware_qdq_v18.md). Its calibration search is anchored to the frozen QNN-validated source encodings and retains an exact source fallback. Neither evaluated candidate passed the complete local/device promotion gates, so the frozen v1.6 standard-QDQ model remains the recommended deployment. The rejected models and ignored raw outputs are not release artifacts.
+
 A lightweight quantization and deployment benchmark for **ResNet18-SiLU on CIFAR-10**, covering PyTorch FP32 evaluation, ONNX export, ONNX Runtime validation, INT8 post-training quantization, CPU latency benchmarking, quantization matrix evaluation, automatic report generation, and custom **SiLU-aware PTQ** simulation.
 
 This project is designed as a reproducible MVP for AI model quantization, model deployment, and inference performance evaluation.
@@ -487,4 +489,3 @@ python scripts/validate_silu_piecewise_ort_native.py --manifest configs\calibrat
 Validation applies the canonical Python Q/DQ reference to the exact ORT-produced pre-Q/DQ SiLU tensors and compares each result with the embedded ONNX subgraph. This is same-backend functional closure only; it does not remove the documented PyTorch-versus-ORT boundary sensitivity, prove portability, or claim INT8 acceleration.
 
 This project is released under the MIT License. See [LICENSE](LICENSE) for details.
-
