@@ -14,6 +14,12 @@ The failure was caused by a calibration contract error rather than an unsupporte
 
 This result establishes an important boundary: successful compilation, full NPU placement, and plausible latency do not prove numerical portability.
 
+The diagnostic AI Hub jobs were:
+
+- Compile: `jprlnox9p` (`SUCCESS`)
+- Profile: `jpxld3q3p` (`SUCCESS`)
+- Balanced 1,000-image inference: `jgol44z1g` (`SUCCESS`, numerically rejected)
+
 ## Corrected calibration contract
 
 For each discovered post-SiLU QDQ pair, the corrected workflow:
@@ -28,6 +34,20 @@ For each discovered post-SiLU QDQ pair, the corrected workflow:
 The manifest records `source_qdq`, `selected_qdq`, the selected scale ratio, zero-point delta, objective improvement, and source-fallback status for every site. The rewrite continues to require an identical operator topology and zero added runtime nodes.
 
 These bounds are conservative engineering defaults for this frozen model. They are not universal quantization constants.
+
+## Final candidate decisions
+
+| Candidate | Local top-1 | Delta vs standard QDQ | Local agreement | Galaxy S22 evidence | Decision |
+|---|---:|---:|---:|---|---|
+| Frozen standard QDQ | 93.57% | baseline | 100.00% | 93.68% on the complete 10,000-image test set | deployment fallback |
+| Aggressive SiLU-aware calibration | 93.62% | +0.05 pp | 98.49% | 75.1% on the balanced 1,000-image preflight | rejected on device |
+| Source-anchored bounded calibration | 93.39% | -0.18 pp | 97.99% | not submitted after the local gate failed | rejected locally |
+
+The source-anchored candidate changed all 17 target QDQ pairs even though every change stayed within the configured scale and zero-point bounds. Its generated model SHA256 was `2F0CDF262AB3FEBCE2B731871A45F6285F10897AF97980E61318580BDDBC27EE`. The complete local gate correctly recorded `rejected_local_fallback_to_source`, `deployable=false`, and `accepted_for_device_preflight=false`.
+
+Twenty focused tests covered deterministic calibration, ONNX QDQ semantics, source-parameter extraction, topology preservation, model execution, and the local promotion decision. All passed. This confirms implementation integrity; it does not override the failed accuracy gates.
+
+No v1.8 candidate is promoted as a deployment model. The frozen v1.6 standard-QDQ model remains the final industrial recommendation.
 
 ## Deployment gate
 
