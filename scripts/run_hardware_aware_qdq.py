@@ -243,11 +243,35 @@ def _model_evaluation(path: Path, images: np.ndarray, labels: np.ndarray, batch_
     if metrics["inference_failure_sample_count"] or metrics["nonfinite_sample_count"]:
         raise RuntimeError(f"model evaluation failed integrity checks: {path}")
     return {
-        "path": str(path),
+        "path": str(path.resolve().relative_to(ROOT.resolve())).replace("\\", "/"),
         "sha256": sha256_file(path),
         "io": contract,
         **metrics,
     }, predictions
+
+
+def prediction_transitions(
+    labels: np.ndarray,
+    reference: np.ndarray,
+    candidate: np.ndarray,
+) -> dict:
+    labels = np.asarray(labels, dtype=np.int64)
+    reference = np.asarray(reference, dtype=np.int64)
+    candidate = np.asarray(candidate, dtype=np.int64)
+    if labels.shape != reference.shape or labels.shape != candidate.shape or labels.ndim != 1:
+        raise ValueError("labels and prediction vectors must be aligned one-dimensional arrays")
+    recovered = np.flatnonzero((reference != labels) & (candidate == labels)).astype(np.int64)
+    regressed = np.flatnonzero((reference == labels) & (candidate != labels)).astype(np.int64)
+    changed = np.flatnonzero(reference != candidate).astype(np.int64)
+    return {
+        "changed_prediction_count": int(changed.size),
+        "changed_prediction_indices": changed.tolist(),
+        "recovered_error_count": int(recovered.size),
+        "recovered_error_indices": recovered.tolist(),
+        "introduced_error_count": int(regressed.size),
+        "introduced_error_indices": regressed.tolist(),
+        "net_correct_change": int(recovered.size - regressed.size),
+    }
 
 
 def _markdown(report: dict) -> str:
@@ -256,8 +280,8 @@ def _markdown(report: dict) -> str:
         "",
         "The piecewise SiLU ranges are calibration hints only. The emitted model keeps the original standard ONNX QDQ operator topology.",
         "",
-        "| Model | Correct | Samples | Top-1 | Delta vs standard QDQ | Agreement vs standard QDQ |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| Model | Correct | Samples | Top-1 | Delta vs standard QDQ | Agreement | Recovered | Introduced |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for model_id, result in report["models"].items():
         comparison = report["comparisons"][model_id]
@@ -265,7 +289,9 @@ def _markdown(report: dict) -> str:
             f"| {model_id} | {result['correct']} | {result['total']} | "
             f"{result['top1_accuracy_percent']:.4f}% | "
             f"{comparison['accuracy_delta_vs_standard_qdq_pp']:+.4f} pp | "
-            f"{comparison['prediction_agreement_vs_standard_qdq_percent']:.4f}% |"
+            f"{comparison['prediction_agreement_vs_standard_qdq_percent']:.4f}% | "
+            f"{comparison['recovered_error_count']} | "
+            f"{comparison['introduced_error_count']} |"
         )
     lines.extend(
         [
@@ -374,6 +400,11 @@ def run(args: argparse.Namespace) -> dict:
             "prediction_agreement_vs_standard_qdq": agreement["agreement"],
             "prediction_agreement_vs_standard_qdq_percent": agreement["agreement_percent"],
             "prediction_disagreement_indices": agreement["disagreement_indices"],
+            **prediction_transitions(
+                test_labels,
+                predictions["standard_qdq"],
+                predictions[model_id],
+            ),
         }
     report = {
         "schema_version": REPORT_SCHEMA,
