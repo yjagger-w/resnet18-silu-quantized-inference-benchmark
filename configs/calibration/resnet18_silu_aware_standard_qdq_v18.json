@@ -32,6 +32,12 @@
   },
   "evaluation_batch": "test_batch",
   "evaluation_batch_size": 128,
+  "local_promotion_gate": {
+    "required_samples": 10000,
+    "minimum_accuracy_delta_vs_standard_qdq_pp": 0.0,
+    "minimum_prediction_agreement_vs_standard_qdq_percent": 98.0,
+    "fallback_model": "source_standard_qdq_model"
+  },
   "model_output": "artifacts/hardware_aware_qdq/v1.8/resnet18_silu_aware_standard_qdq.onnx",
   "manifest_output": "artifacts/hardware_aware_qdq/v1.8/calibration_manifest.json",
   "report_output": "results/benchmarks/v1.8_hardware_aware_qdq_local"

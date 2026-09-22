@@ -101,6 +101,18 @@ def load_config(path: Path) -> dict:
         raise ValueError("max_zero_point_delta must be a non-negative integer")
     if not 0.0 <= minimum_improvement < 1.0:
         raise ValueError("minimum_relative_improvement must be in [0, 1)")
+    gate = payload.get("local_promotion_gate", {})
+    if gate.get("required_samples") != 10_000:
+        raise ValueError("v1.8 promotion requires the complete 10,000-image test set")
+    if float(gate.get("minimum_accuracy_delta_vs_standard_qdq_pp", -1.0)) < 0.0:
+        raise ValueError("v1.8 promotion must not allow an accuracy regression")
+    minimum_agreement = float(
+        gate.get("minimum_prediction_agreement_vs_standard_qdq_percent", 0.0)
+    )
+    if not 0.0 <= minimum_agreement <= 100.0:
+        raise ValueError("promotion agreement threshold must be in [0, 100]")
+    if gate.get("fallback_model") != "source_standard_qdq_model":
+        raise ValueError("v1.8 deployment fallback must be the source QDQ model")
     return payload
 
 
@@ -305,6 +317,48 @@ def prediction_transitions(
     }
 
 
+def evaluate_local_promotion_gate(
+    comparison: dict,
+    *,
+    evaluation_samples: int,
+    gate: dict,
+) -> dict:
+    """Decide whether a candidate is allowed to proceed to device preflight."""
+
+    required_samples = int(gate["required_samples"])
+    minimum_accuracy = float(gate["minimum_accuracy_delta_vs_standard_qdq_pp"])
+    minimum_agreement = float(
+        gate["minimum_prediction_agreement_vs_standard_qdq_percent"]
+    )
+    accuracy_delta = float(comparison["accuracy_delta_vs_standard_qdq_pp"])
+    agreement = float(
+        comparison["prediction_agreement_vs_standard_qdq_percent"]
+    )
+    checks = {
+        "complete_evaluation": evaluation_samples == required_samples,
+        "accuracy_not_regressed": accuracy_delta >= minimum_accuracy,
+        "prediction_agreement_sufficient": agreement >= minimum_agreement,
+    }
+    if not checks["complete_evaluation"]:
+        status = "incomplete"
+    elif all(checks.values()):
+        status = "accepted_for_device_preflight"
+    else:
+        status = "rejected_local_fallback_to_source"
+    return {
+        "status": status,
+        "accepted_for_device_preflight": status == "accepted_for_device_preflight",
+        "checks": checks,
+        "required_samples": required_samples,
+        "evaluated_samples": int(evaluation_samples),
+        "minimum_accuracy_delta_vs_standard_qdq_pp": minimum_accuracy,
+        "actual_accuracy_delta_vs_standard_qdq_pp": accuracy_delta,
+        "minimum_prediction_agreement_vs_standard_qdq_percent": minimum_agreement,
+        "actual_prediction_agreement_vs_standard_qdq_percent": agreement,
+        "fallback_model": gate["fallback_model"],
+    }
+
+
 def _markdown(report: dict) -> str:
     lines = [
         "# v1.8 hardware-aware standard QDQ local evaluation",
@@ -327,6 +381,12 @@ def _markdown(report: dict) -> str:
         )
     lines.extend(
         [
+            "## Local promotion gate",
+            "",
+            f"- Status: `{report['local_promotion_gate']['status']}`",
+            f"- Accepted for device preflight: `{str(report['local_promotion_gate']['accepted_for_device_preflight']).lower()}`",
+            f"- Deployment fallback: `{report['local_promotion_gate']['fallback_model']}`",
+            "",
             "",
             "## Runtime contract",
             "",
@@ -404,7 +464,6 @@ def run(args: argparse.Namespace) -> dict:
         "sha256": sha256_file(model_output),
         "graph_contract": graph_contract,
     }
-    _atomic_json(manifest_output, manifest, force=args.force)
 
     test_images, test_labels = load_cifar_batch(data_root, config["evaluation_batch"])
     if args.evaluation_samples < 0 or args.evaluation_samples > len(test_images):
@@ -439,6 +498,24 @@ def run(args: argparse.Namespace) -> dict:
                 predictions[model_id],
             ),
         }
+    local_promotion_gate = evaluate_local_promotion_gate(
+        comparisons["silu_aware_standard_qdq"],
+        evaluation_samples=count,
+        gate=config["local_promotion_gate"],
+    )
+    manifest["local_promotion_gate"] = local_promotion_gate
+    manifest["selection_summary"]["device_preflight_status"] = (
+        "authorized_not_run"
+        if local_promotion_gate["accepted_for_device_preflight"]
+        else "blocked_by_local_promotion_gate"
+    )
+    manifest["generated_model"]["deployment_status"] = local_promotion_gate[
+        "status"
+    ]
+    manifest["generated_model"]["deployable"] = local_promotion_gate[
+        "accepted_for_device_preflight"
+    ]
+    _atomic_json(manifest_output, manifest, force=args.force)
     report = {
         "schema_version": REPORT_SCHEMA,
         "environment": {
@@ -462,6 +539,7 @@ def run(args: argparse.Namespace) -> dict:
         "graph_contract": graph_contract,
         "models": model_results,
         "comparisons": comparisons,
+        "local_promotion_gate": local_promotion_gate,
         "limitations": [
             "This report is local ONNX Runtime CPU evidence, not QNN device evidence.",
             "The piecewise ranges guide offline calibration only and are absent from runtime dispatch.",
@@ -497,6 +575,13 @@ def main() -> None:
                     "prediction_agreement_vs_standard_qdq_percent"
                 ],
                 "added_runtime_nodes": report["graph_contract"]["added_node_count"],
+                "local_promotion_status": report["local_promotion_gate"]["status"],
+                "accepted_for_device_preflight": report["local_promotion_gate"][
+                    "accepted_for_device_preflight"
+                ],
+                "deployment_fallback": report["local_promotion_gate"][
+                    "fallback_model"
+                ],
             },
             indent=2,
         )

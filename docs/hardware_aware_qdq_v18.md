@@ -35,11 +35,12 @@ The corrected model is not deployment-approved by a local accuracy result. Valid
 
 1. Run unit, ONNX Runtime, topology, and deterministic-calibration tests.
 2. Evaluate the complete 10,000-image local CIFAR-10 test set.
-3. Compile for the target QNN device.
-4. Run the fixed balanced 1,000-image Galaxy S22 preflight and compare it with both local output and the frozen standard-QDQ device baseline.
-5. Stop if accuracy, prediction agreement, or finite-output checks regress materially.
-6. Profile the passing candidate and reject CPU/GPU fallback or material latency regression.
-7. Run the full 10,000-image device evaluation only after the accuracy and profile gates pass.
+3. Require no top-1 regression against standard QDQ and at least 98% prediction agreement. A failed local gate records the source QDQ model as the deployment fallback and stops the workflow.
+4. Compile for the target QNN device.
+5. Run the fixed balanced 1,000-image Galaxy S22 preflight and compare it with both local output and the frozen standard-QDQ device baseline.
+6. Stop if accuracy, prediction agreement, or finite-output checks regress materially.
+7. Profile the passing candidate and reject CPU/GPU fallback or material latency regression.
+8. Run the full 10,000-image device evaluation only after the accuracy and profile gates pass.
 
 On any failed device gate, the deployment recommendation remains the frozen v1.6 standard-QDQ model. A calibration candidate is never promoted solely because it improves an offline error proxy or local top-1 accuracy.
 
