@@ -10,6 +10,7 @@ from onnx import TensorProto, helper, numpy_helper
 from silu_benchmark.accuracy_recovery import discover_qdq_silu_sites
 from silu_benchmark.hardware_aware_qdq_model import (
     METADATA_KEY,
+    extract_standard_qdq_site_specs,
     rewrite_standard_qdq_parameters,
     validate_standard_qdq_rewrite,
 )
@@ -115,6 +116,15 @@ class HardwareAwareStandardQDQModelTests(unittest.TestCase):
         self.assertEqual(len(self.sites), 17)
         self.assertEqual(self.sites[0].site_id, "act.call_0")
         self.assertEqual(self.sites[-1].site_id, "layer4.1.act.call_1")
+
+    def test_source_qdq_specs_are_extracted_from_existing_model(self):
+        specs = extract_standard_qdq_site_specs(self.model)
+        self.assertEqual(set(specs), {site.site_id for site in self.sites})
+        self.assertEqual(len(specs), 17)
+        for spec in specs.values():
+            self.assertAlmostEqual(spec.scale, 0.02, places=7)
+            self.assertEqual(spec.zero_point, 14)
+            self.assertEqual(spec.bits, 8)
 
     def test_rewrite_preserves_nodes_and_emits_only_standard_parameters(self):
         original = self.model.SerializeToString()

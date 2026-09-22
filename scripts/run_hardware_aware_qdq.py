@@ -30,6 +30,7 @@ from silu_benchmark.benchmark_data import (
     normalize_cifar_images,
 )
 from silu_benchmark.hardware_aware_qdq_model import (
+    extract_standard_qdq_site_specs,
     rewrite_standard_qdq_parameters,
     validate_standard_qdq_rewrite,
 )
@@ -90,6 +91,16 @@ def load_config(path: Path) -> dict:
     search = payload.get("standard_qdq_search", {})
     if search.get("bits") != 8 or float(search.get("central_weight", 0.0)) < 1.0:
         raise ValueError("v1.8 requires uint8 QDQ and central_weight >= 1")
+    ratio_min = float(search.get("source_scale_ratio_min", 0.0))
+    ratio_max = float(search.get("source_scale_ratio_max", 0.0))
+    zero_delta = search.get("max_zero_point_delta")
+    minimum_improvement = float(search.get("minimum_relative_improvement", -1.0))
+    if not 0.0 < ratio_min <= 1.0 <= ratio_max:
+        raise ValueError("source scale ratio bounds must include 1.0")
+    if not isinstance(zero_delta, int) or zero_delta < 0:
+        raise ValueError("max_zero_point_delta must be a non-negative integer")
+    if not 0.0 <= minimum_improvement < 1.0:
+        raise ValueError("minimum_relative_improvement must be in [0, 1)")
     return payload
 
 
@@ -198,6 +209,7 @@ def collect_post_silu_values(
 def calibrate_sites(
     sites,
     site_values: dict[str, np.ndarray],
+    source_specs: dict,
     config: dict,
 ) -> tuple[dict, dict]:
     hint_config = config["piecewise_hint"]
@@ -215,6 +227,13 @@ def calibrate_sites(
             upper_steps=int(search["upper_steps"]),
             central_weight=float(search["central_weight"]),
             max_samples=int(search["max_samples"]),
+            source_qdq=source_specs[site.site_id],
+            source_scale_ratio_min=float(search["source_scale_ratio_min"]),
+            source_scale_ratio_max=float(search["source_scale_ratio_max"]),
+            max_zero_point_delta=int(search["max_zero_point_delta"]),
+            minimum_relative_improvement=float(
+                search["minimum_relative_improvement"]
+            ),
         )
         specs[site.site_id] = qdq_spec_from_manifest(result)
         records.append(
@@ -228,10 +247,22 @@ def calibrate_sites(
             }
         )
     digest = canonical_hash({"sites": records})
+    fallback_count = sum(
+        int(record["standard_qdq_calibration"]["selection"]["fallback_to_source"])
+        for record in records
+    )
     return {
         "schema_version": "hardware-aware-standard-qdq-calibration-manifest/v1.8",
         "calibration_digest": digest,
         "target_site_count": len(records),
+        "selection_summary": {
+            "search_mode": "source_anchored_bounded",
+            "source_fallback_site_count": fallback_count,
+            "changed_site_count": len(records) - fallback_count,
+            "device_preflight_required": True,
+            "device_preflight_status": "not_run",
+            "deployment_fallback": "source_standard_qdq_model",
+        },
         "sites": records,
     }, specs
 
@@ -279,6 +310,7 @@ def _markdown(report: dict) -> str:
         "# v1.8 hardware-aware standard QDQ local evaluation",
         "",
         "The piecewise SiLU ranges are calibration hints only. The emitted model keeps the original standard ONNX QDQ operator topology.",
+        "Candidate encodings are bounded around the QNN-validated source QDQ parameters; this local report does not approve deployment without a device preflight.",
         "",
         "| Model | Correct | Samples | Top-1 | Delta vs standard QDQ | Agreement | Recovered | Introduced |",
         "|---|---:|---:|---:|---:|---:|---:|---:|",
@@ -337,6 +369,7 @@ def run(args: argparse.Namespace) -> dict:
 
     training_images, _training_labels = load_cifar_batch(data_root, config["calibration_batch"])
     source_model = onnx.load(str(source_path))
+    source_specs = extract_standard_qdq_site_specs(source_model)
     sites, values = collect_post_silu_values(
         source_model,
         training_images,
@@ -344,7 +377,7 @@ def run(args: argparse.Namespace) -> dict:
         batch_size=int(config["calibration_batch_size"]),
         per_site_limit=int(config["per_site_calibration_values"]),
     )
-    manifest, specs = calibrate_sites(sites, values, config)
+    manifest, specs = calibrate_sites(sites, values, source_specs, config)
     manifest.update(
         {
             "configuration": config,
@@ -432,6 +465,8 @@ def run(args: argparse.Namespace) -> dict:
         "limitations": [
             "This report is local ONNX Runtime CPU evidence, not QNN device evidence.",
             "The piecewise ranges guide offline calibration only and are absent from runtime dispatch.",
+            "Source-anchored parameter bounds reduce risk but do not guarantee QNN numerical equivalence.",
+            "Deployment requires a balanced device preflight and falls back to the frozen source QDQ model on failure.",
             "The selected thresholds are specific to the frozen model and calibration set.",
         ],
     }

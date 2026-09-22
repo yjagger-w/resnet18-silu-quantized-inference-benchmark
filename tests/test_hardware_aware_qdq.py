@@ -107,6 +107,41 @@ class SiLUAwareStandardQDQCalibrationTests(unittest.TestCase):
             "[Vmin, Vsplit)",
         )
 
+    def test_source_anchored_search_stays_bounded_and_reports_provenance(self):
+        source = StandardQDQSpec(scale=0.02, zero_point=14)
+        result = calibrate_silu_aware_standard_qdq(
+            self.values,
+            self.hint,
+            source_qdq=source,
+            source_scale_ratio_min=0.90,
+            source_scale_ratio_max=1.10,
+            max_zero_point_delta=4,
+        )
+        selected = qdq_spec_from_manifest(result)
+        self.assertEqual(result["source_qdq"], source.to_manifest())
+        self.assertEqual(
+            result["selection"]["search_mode"], "source_anchored_bounded"
+        )
+        self.assertGreaterEqual(selected.scale / source.scale, 0.90)
+        self.assertLessEqual(selected.scale / source.scale, 1.10)
+        self.assertLessEqual(abs(selected.zero_point - source.zero_point), 4)
+        self.assertLessEqual(result["weighted_mse_ratio_vs_source"], 1.0)
+
+    def test_source_fallback_rejects_immaterial_candidate(self):
+        source = StandardQDQSpec(scale=0.02, zero_point=14)
+        result = calibrate_silu_aware_standard_qdq(
+            self.values,
+            self.hint,
+            source_qdq=source,
+            minimum_relative_improvement=0.999,
+        )
+        self.assertEqual(qdq_spec_from_manifest(result), source)
+        self.assertTrue(result["selection"]["fallback_to_source"])
+        self.assertIn(result["selection"]["reason"], {
+            "source_already_best",
+            "candidate_improvement_below_minimum",
+        })
+
     def test_bounded_sampling_is_reproducible(self):
         first = calibrate_silu_aware_standard_qdq(
             self.values, self.hint, max_samples=1024
@@ -132,6 +167,13 @@ class SiLUAwareStandardQDQCalibrationTests(unittest.TestCase):
             calibrate_silu_aware_standard_qdq(self.values, self.hint, bits=7)
         with self.assertRaises(ValueError):
             calibrate_silu_aware_standard_qdq(self.values, self.hint, central_weight=0.5)
+        with self.assertRaises(ValueError):
+            calibrate_silu_aware_standard_qdq(
+                self.values,
+                self.hint,
+                source_qdq=StandardQDQSpec(0.02, 14),
+                source_scale_ratio_min=1.1,
+            )
 
     def test_module_import_does_not_load_torch(self):
         program = r'''

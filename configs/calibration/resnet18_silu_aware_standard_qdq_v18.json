@@ -24,7 +24,11 @@
     "lower_steps": 8,
     "upper_steps": 24,
     "central_weight": 2.0,
-    "max_samples": 200000
+    "max_samples": 200000,
+    "source_scale_ratio_min": 0.9,
+    "source_scale_ratio_max": 1.1,
+    "max_zero_point_delta": 4,
+    "minimum_relative_improvement": 0.005
   },
   "evaluation_batch": "test_batch",
   "evaluation_batch_size": 128,

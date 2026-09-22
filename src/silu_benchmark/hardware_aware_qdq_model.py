@@ -54,6 +54,38 @@ def _safe_site_name(site_id: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]", "_", site_id)
 
 
+def extract_standard_qdq_site_specs(
+    model: onnx.ModelProto,
+) -> dict[str, StandardQDQSpec]:
+    """Read the existing scalar uint8 QDQ encoding for every post-SiLU site."""
+
+    sites = discover_qdq_silu_sites(model)
+    initializers = _initializer_map(model)
+    specs: dict[str, StandardQDQSpec] = {}
+    for site in sites:
+        quantize = model.graph.node[site.output_quantize_node_index]
+        dequantize = model.graph.node[site.output_dequantize_node_index]
+        if len(quantize.input) != 3 or len(dequantize.input) != 3:
+            raise ValueError(f"{site.site_id} is not an asymmetric scalar QDQ pair")
+        if list(quantize.input[1:]) != list(dequantize.input[1:]):
+            raise ValueError(f"{site.site_id} QuantizeLinear/DequantizeLinear parameters differ")
+        scale_name, zero_name = quantize.input[1:]
+        if scale_name not in initializers or zero_name not in initializers:
+            raise ValueError(f"{site.site_id} QDQ parameter initializer is missing")
+        scale = numpy_helper.to_array(initializers[scale_name])
+        zero_point = numpy_helper.to_array(initializers[zero_name])
+        if scale.shape != () or scale.dtype != np.float32 or not float(scale) > 0.0:
+            raise ValueError(f"{site.site_id} scale must be a positive float32 scalar")
+        if zero_point.shape != () or zero_point.dtype != np.uint8:
+            raise ValueError(f"{site.site_id} zero-point must be a uint8 scalar")
+        specs[site.site_id] = StandardQDQSpec(
+            scale=float(scale),
+            zero_point=int(zero_point),
+            bits=8,
+        )
+    return specs
+
+
 def _validate_site_parameters(
     sites: tuple[QDQSiLUSite, ...], site_specs: Mapping[str, StandardQDQSpec]
 ) -> None:

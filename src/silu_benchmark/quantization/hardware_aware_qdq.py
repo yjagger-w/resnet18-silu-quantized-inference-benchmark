@@ -140,6 +140,70 @@ def _error_metrics(
     }
 
 
+def _clipped_fraction(values: np.ndarray, spec: StandardQDQSpec) -> float:
+    return float(
+        np.mean(
+            (values < spec.representable_min)
+            | (values > spec.representable_max)
+        )
+    )
+
+
+def _evaluate_spec(
+    values: np.ndarray,
+    spec: StandardQDQSpec,
+    *,
+    vsplit: float,
+    central_weight: float,
+) -> dict:
+    reconstructed = standard_qdq_quantize_dequantize(values, spec)
+    return {
+        **_error_metrics(
+            values,
+            reconstructed,
+            vsplit=vsplit,
+            central_weight=central_weight,
+        ),
+        "clipped_fraction": _clipped_fraction(values, spec),
+    }
+
+
+def _source_anchored_specs(
+    source_spec: StandardQDQSpec,
+    *,
+    scale_ratio_min: float,
+    scale_ratio_max: float,
+    max_zero_point_delta: int,
+    scale_steps: int,
+    zero_point_steps: int,
+) -> list[StandardQDQSpec]:
+    ratios = np.linspace(scale_ratio_min, scale_ratio_max, scale_steps)
+    deltas = np.rint(
+        np.linspace(-max_zero_point_delta, max_zero_point_delta, zero_point_steps)
+    ).astype(np.int64)
+    ratios = np.unique(np.concatenate([ratios, np.asarray([1.0])]))
+    deltas = np.unique(np.concatenate([deltas, np.asarray([0], dtype=np.int64)]))
+
+    unique: dict[tuple[float, int], StandardQDQSpec] = {}
+    for ratio in ratios:
+        scale = float(np.float32(source_spec.scale * float(ratio)))
+        for delta in deltas:
+            zero_point = int(source_spec.zero_point + int(delta))
+            if not source_spec.qmin <= zero_point <= source_spec.qmax:
+                continue
+            spec = StandardQDQSpec(
+                scale=scale,
+                zero_point=zero_point,
+                bits=source_spec.bits,
+            )
+            unique[(spec.scale, spec.zero_point)] = spec
+
+    # Preserve the exact float32 source encoding even when linspace rounding
+    # would otherwise produce a numerically adjacent value.
+    unique[(source_spec.scale, source_spec.zero_point)] = source_spec
+    return list(unique.values())
+
+
 def calibrate_silu_aware_standard_qdq(
     values: np.ndarray,
     piecewise_hint: PiecewiseQuantizationSpec,
@@ -149,12 +213,20 @@ def calibrate_silu_aware_standard_qdq(
     upper_steps: int = 24,
     central_weight: float = 2.0,
     max_samples: int = 200_000,
+    source_qdq: StandardQDQSpec | None = None,
+    source_scale_ratio_min: float = 0.90,
+    source_scale_ratio_max: float = 1.10,
+    max_zero_point_delta: int = 4,
+    minimum_relative_improvement: float = 0.005,
 ) -> dict:
     """Select one portable affine QDQ pair using offline SiLU range hints.
 
-    ``Vmin``, ``Vsplit``, and ``Vmax`` influence candidate construction and
-    the calibration objective only.  The returned deployment parameters do
-    not contain a split or a second scale.
+    ``Vmin``, ``Vsplit``, and ``Vmax`` influence the calibration objective
+    only when ``source_qdq`` is supplied. Candidate encodings are then
+    constrained around the source model's device-validated QDQ parameters.
+    If no bounded candidate materially improves the full calibration
+    objective, the exact source encoding is selected. The returned deployment
+    parameters never contain a split or a second scale.
     """
 
     if not isinstance(piecewise_hint, PiecewiseQuantizationSpec):
@@ -165,63 +237,139 @@ def calibrate_silu_aware_standard_qdq(
         raise ValueError("search grids require at least two steps")
     if not math.isfinite(central_weight) or central_weight < 1.0:
         raise ValueError("central_weight must be finite and at least 1.0")
+    if source_qdq is not None:
+        if not isinstance(source_qdq, StandardQDQSpec):
+            raise TypeError("source_qdq must be a StandardQDQSpec")
+        if source_qdq.bits != bits:
+            raise ValueError("source_qdq bits must match the requested bits")
+        if (
+            not math.isfinite(source_scale_ratio_min)
+            or not math.isfinite(source_scale_ratio_max)
+            or not 0.0 < source_scale_ratio_min <= 1.0 <= source_scale_ratio_max
+        ):
+            raise ValueError("source scale ratio bounds must be finite and include 1.0")
+        if not isinstance(max_zero_point_delta, (int, np.integer)):
+            raise TypeError("max_zero_point_delta must be an integer")
+        if max_zero_point_delta < 0:
+            raise ValueError("max_zero_point_delta must not be negative")
+        if (
+            not math.isfinite(minimum_relative_improvement)
+            or not 0.0 <= minimum_relative_improvement < 1.0
+        ):
+            raise ValueError(
+                "minimum_relative_improvement must be finite and in [0, 1)"
+            )
 
     full_values = _validate_values(values)
     sample = _bounded_sample(full_values, max_samples)
 
-    # The lower grid preserves the characteristic SiLU negative basin while
-    # permitting controlled clipping.  The upper grid starts at Vsplit and
-    # progressively admits the positive tail up to Vmax.
-    lower_candidates = piecewise_hint.vmin * np.linspace(0.60, 1.0, lower_steps)
-    upper_candidates = piecewise_hint.vsplit + (
-        piecewise_hint.vmax - piecewise_hint.vsplit
-    ) * np.linspace(0.10, 1.0, upper_steps)
-
     candidates: list[tuple[tuple[float, ...], StandardQDQSpec, dict]] = []
-    for lower in lower_candidates:
-        for upper in upper_candidates:
-            spec = _affine_spec_for_range(float(lower), float(upper), bits)
-            reconstructed = standard_qdq_quantize_dequantize(sample, spec)
-            metrics = _error_metrics(
-                sample,
-                reconstructed,
-                vsplit=piecewise_hint.vsplit,
-                central_weight=central_weight,
-            )
-            clipped_fraction = float(
-                np.mean(
-                    (sample < spec.representable_min)
-                    | (sample > spec.representable_max)
-                )
-            )
-            key = (
-                metrics["weighted_mse"],
-                metrics["mse"],
-                clipped_fraction,
-                spec.scale,
-                float(spec.zero_point),
-            )
-            candidates.append((key, spec, {**metrics, "clipped_fraction": clipped_fraction}))
+    minmax = _affine_spec_for_range(piecewise_hint.vmin, piecewise_hint.vmax, bits)
+    if source_qdq is None:
+        # Backward-compatible research path. Production v1.8 orchestration
+        # supplies source_qdq and never uses this unanchored candidate grid.
+        lower_candidates = piecewise_hint.vmin * np.linspace(0.60, 1.0, lower_steps)
+        upper_candidates = piecewise_hint.vsplit + (
+            piecewise_hint.vmax - piecewise_hint.vsplit
+        ) * np.linspace(0.10, 1.0, upper_steps)
+        candidate_specs = [
+            _affine_spec_for_range(float(lower), float(upper), bits)
+            for lower in lower_candidates
+            for upper in upper_candidates
+        ]
+        source = minmax
+        search_mode = "legacy_unanchored"
+    else:
+        source = source_qdq
+        candidate_specs = _source_anchored_specs(
+            source,
+            scale_ratio_min=source_scale_ratio_min,
+            scale_ratio_max=source_scale_ratio_max,
+            max_zero_point_delta=max_zero_point_delta,
+            scale_steps=upper_steps,
+            zero_point_steps=lower_steps,
+        )
+        search_mode = "source_anchored_bounded"
 
-    _key, selected, sample_metrics = min(candidates, key=lambda item: item[0])
-    baseline = _affine_spec_for_range(piecewise_hint.vmin, piecewise_hint.vmax, bits)
-    selected_full = standard_qdq_quantize_dequantize(full_values, selected)
-    baseline_full = standard_qdq_quantize_dequantize(full_values, baseline)
-    selected_metrics = _error_metrics(
+    for spec in candidate_specs:
+        metrics = _evaluate_spec(
+            sample,
+            spec,
+            vsplit=piecewise_hint.vsplit,
+            central_weight=central_weight,
+        )
+        scale_distance = abs(math.log(spec.scale / source.scale))
+        zero_point_distance = abs(spec.zero_point - source.zero_point)
+        key = (
+            metrics["weighted_mse"],
+            metrics["mse"],
+            metrics["clipped_fraction"],
+            scale_distance,
+            float(zero_point_distance),
+            spec.scale,
+            float(spec.zero_point),
+        )
+        candidates.append((key, spec, metrics))
+
+    _key, proposed, proposed_sample_metrics = min(candidates, key=lambda item: item[0])
+    proposed_metrics = _evaluate_spec(
         full_values,
-        selected_full,
+        proposed,
         vsplit=piecewise_hint.vsplit,
         central_weight=central_weight,
     )
-    baseline_metrics = _error_metrics(
+    source_metrics = _evaluate_spec(
         full_values,
-        baseline_full,
+        source,
         vsplit=piecewise_hint.vsplit,
         central_weight=central_weight,
     )
+    source_weighted_mse = source_metrics["weighted_mse"]
+    relative_improvement = (
+        (source_weighted_mse - proposed_metrics["weighted_mse"])
+        / source_weighted_mse
+        if source_weighted_mse > 0.0
+        else 0.0
+    )
+    proposed_is_source = proposed == source
+    fallback_to_source = source_qdq is not None and (
+        proposed_is_source or relative_improvement < minimum_relative_improvement
+    )
+    if fallback_to_source:
+        selected = source
+        selected_metrics = source_metrics
+        sample_metrics = _evaluate_spec(
+            sample,
+            source,
+            vsplit=piecewise_hint.vsplit,
+            central_weight=central_weight,
+        )
+        selection_reason = (
+            "source_already_best"
+            if proposed_is_source
+            else "candidate_improvement_below_minimum"
+        )
+    else:
+        selected = proposed
+        selected_metrics = proposed_metrics
+        sample_metrics = proposed_sample_metrics
+        selection_reason = (
+            "bounded_candidate_improved_weighted_mse"
+            if source_qdq is not None
+            else "legacy_unanchored_objective_minimum"
+        )
+
+    minmax_metrics = _evaluate_spec(
+        full_values,
+        minmax,
+        vsplit=piecewise_hint.vsplit,
+        central_weight=central_weight,
+    )
+    selected_scale_ratio = selected.scale / source.scale
+    selected_zero_point_delta = selected.zero_point - source.zero_point
 
     return {
-        "schema_version": "silu-aware-standard-qdq-calibration/v1",
+        "schema_version": "silu-aware-standard-qdq-calibration/v2",
         "runtime_contract": {
             "quantize_op": "QuantizeLinear",
             "dequantize_op": "DequantizeLinear",
@@ -230,7 +378,20 @@ def calibrate_silu_aware_standard_qdq(
             "piecewise_runtime_dispatch": False,
         },
         "selected_qdq": selected.to_manifest(),
-        "baseline_qdq": baseline.to_manifest(),
+        "source_qdq": source.to_manifest(),
+        "baseline_qdq": source.to_manifest(),
+        "minmax_qdq": minmax.to_manifest(),
+        "selection": {
+            "search_mode": search_mode,
+            "fallback_to_source": fallback_to_source,
+            "reason": selection_reason,
+            "minimum_relative_improvement": float(minimum_relative_improvement),
+            "proposed_relative_weighted_mse_improvement_vs_source": float(
+                relative_improvement
+            ),
+            "scale_ratio_vs_source": float(selected_scale_ratio),
+            "zero_point_delta_vs_source": int(selected_zero_point_delta),
+        },
         "offline_calibration": {
             "piecewise_hint": {
                 "vmin": piecewise_hint.vmin,
@@ -243,16 +404,26 @@ def calibrate_silu_aware_standard_qdq(
             "central_weight": float(central_weight),
             "lower_steps": int(lower_steps),
             "upper_steps": int(upper_steps),
+            "source_scale_ratio_min": float(source_scale_ratio_min),
+            "source_scale_ratio_max": float(source_scale_ratio_max),
+            "max_zero_point_delta": int(max_zero_point_delta),
             "candidate_count": len(candidates),
             "input_count": int(full_values.size),
             "search_sample_count": int(sample.size),
         },
         "selected_error": selected_metrics,
-        "baseline_error": baseline_metrics,
+        "source_error": source_metrics,
+        "baseline_error": source_metrics,
+        "minmax_error": minmax_metrics,
         "search_sample_error": sample_metrics,
         "weighted_mse_ratio_vs_minmax": (
-            selected_metrics["weighted_mse"] / baseline_metrics["weighted_mse"]
-            if baseline_metrics["weighted_mse"] > 0.0
+            selected_metrics["weighted_mse"] / minmax_metrics["weighted_mse"]
+            if minmax_metrics["weighted_mse"] > 0.0
+            else 1.0
+        ),
+        "weighted_mse_ratio_vs_source": (
+            selected_metrics["weighted_mse"] / source_metrics["weighted_mse"]
+            if source_metrics["weighted_mse"] > 0.0
             else 1.0
         ),
     }
